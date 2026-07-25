@@ -1,5 +1,6 @@
 #include "CrossPointSettings.h"
 
+#include <BoardConfig.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <ObfuscationUtils.h>
@@ -203,6 +204,14 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   if (needsResave) {
     LOG_DBG("CPS", "Resaving settings to update format");
     requestResave();
+  }
+
+  // Touch-only boards (no physical nav buttons, e.g. M5Paper S3) must keep touch
+  // reader controls on: touch is the only input, so a stale settings file with it
+  // OFF (e.g. carried over from other firmware) would leave the device unnavigable
+  // with no way to turn it back on.
+  if (BoardConfig::hasTouch() && !BoardConfig::hasNavButtons()) {
+    touchReaderControls = TOUCH_READER_ON;
   }
 
   LOG_DBG("CPS", "Settings loaded from file");

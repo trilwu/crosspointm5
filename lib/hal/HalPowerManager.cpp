@@ -86,6 +86,23 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
   // guarantees that ordering).
   freeink::PowerManager::powerDownRailsForSleep();
 
+  // M5Paper S3: the power button is wired to the AXP2101 PMIC, not a GPIO, so deep
+  // sleep has no wake source (armPowerButtonWakeup() would no-op and the device
+  // could never wake). Instead pulse GPIO44 (PWROFF) to have the PMIC cut power to
+  // the whole board; a power-button press then powers it back on as a cold boot,
+  // matching the stock/fork behavior. A short timer wake is armed as a fallback for
+  // the USB-powered case, where the PMIC can't fully cut power.
+  if (BoardConfig::isM5PaperS3()) {
+    constexpr gpio_num_t PWROFF_PULSE_PIN = GPIO_NUM_44;
+    pinMode(PWROFF_PULSE_PIN, OUTPUT);
+    digitalWrite(PWROFF_PULSE_PIN, HIGH);
+    delay(100);
+    digitalWrite(PWROFF_PULSE_PIN, LOW);
+    esp_sleep_enable_timer_wakeup(5ULL * 1000 * 1000);  // USB-powered fallback
+    freeink::PowerManager::deepSleep();                 // does not return
+    return;
+  }
+
   // Waits for the power button to be physically released (so holding it doesn't
   // immediately wake the device again), then arms the wake source and sleeps.
   freeink::PowerManager::deepSleepUntilPowerButton();
