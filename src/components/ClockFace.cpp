@@ -62,7 +62,9 @@ bool ClockFace::draw(const GfxRenderer& renderer, const bool fullRefresh) {
   const int t = dw / 6;
   const int gap = dw / 6;
   const int colonW = dw / 3;
-  const int totalW = 4 * dw + 3 * gap + colonW;
+  // Four gaps, not three: the draw sequence below advances by a gap after each of
+  // the two hour digits, the colon, and the first minute digit.
+  const int totalW = 4 * dw + 4 * gap + colonW;
   int x = (pageWidth - totalW) / 2;
   const int y = pageHeight / 2 - dh;
 
