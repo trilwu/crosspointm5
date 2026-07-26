@@ -39,6 +39,25 @@ bool HalClock::getTime(uint8_t& hour, uint8_t& minute) const {
   return true;
 }
 
+bool HalClock::getLocalDateTime(ClockMath::Date& out, uint8_t& secondOut, uint8_t utcOffsetQuarterHoursBiased) const {
+  if (!_available) return false;
+
+  // Deliberately uncached: the clock screen aligns its refresh to the RTC's
+  // seconds, so a 10s-stale read would drift the minute boundary.
+  Rtc::DateTime dt;
+  if (!_sdkRtc.now(dt)) return false;
+
+  out.year = dt.year;
+  out.month = dt.month;
+  out.day = dt.day;
+  out.hour = dt.hour;
+  out.minute = dt.minute;
+  secondOut = dt.second;
+
+  ClockMath::applyOffsetMinutes(out, ClockMath::offsetMinutesFromBiasedQuarters(utcOffsetQuarterHoursBiased));
+  return true;
+}
+
 bool HalClock::formatTime(char* buf, size_t bufSize, uint8_t utcOffsetQuarterHoursBiased, bool use12Hour) const {
   if (bufSize < (use12Hour ? 9u : 6u)) return false;
   uint8_t h, m;

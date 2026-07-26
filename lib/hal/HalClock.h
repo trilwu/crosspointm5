@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <ClockMath.h>
 #include <Rtc.h>
 
 class HalClock;
@@ -26,6 +27,14 @@ class HalClock {
   // Get current hour (0-23) and minute (0-59).
   // Returns false if RTC is not available.
   bool getTime(uint8_t& hour, uint8_t& minute) const;
+
+  // Full local wall-clock date/time, bypassing the getTime() cache.
+  // The UTC offset is applied calendar-correctly (the date rolls across midnight),
+  // unlike formatTime() which only wraps hours/minutes.
+  // `secondOut` receives the RTC seconds (used to align a refresh to the next minute).
+  // utcOffsetQuarterHoursBiased: biased quarter-hour offset (48 = UTC+0).
+  // Returns false if the RTC is not available or the read failed.
+  bool getLocalDateTime(ClockMath::Date& out, uint8_t& secondOut, uint8_t utcOffsetQuarterHoursBiased = 48) const;
 
   // Format time into a caller-provided buffer.
   // 24h mode produces "HH:MM" (needs >=6 bytes); 12h mode produces "H:MM AM"/"HH:MM PM" (needs >=9 bytes).
