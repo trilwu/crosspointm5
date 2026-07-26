@@ -86,6 +86,25 @@ TEST(ApplyOffsetMinutes, HandlesQuarterHourOffset) {
   EXPECT_EQ(d.minute, 15);
 }
 
+TEST(ApplyOffsetMinutes, RollsBackwardIntoLeapDay) {
+  // Pins the backward path's daysInMonth() lookup: without it, "assume 31 days"
+  // would still pass every other test (Jan 1 -> Dec 31 is also 31).
+  // 2028-03-01 00:30 -1h -> 2028-02-29 23:30
+  Date d = mk(2028, 3, 1, 0, 30);
+  ClockMath::applyOffsetMinutes(d, -60);
+  EXPECT_EQ(d.month, 2);
+  EXPECT_EQ(d.day, 29);
+  EXPECT_EQ(d.hour, 23);
+}
+
+TEST(IsLeapYear, HandlesCenturyRule) {
+  // The %100 / %400 clauses are invisible to the other tests, which all pass
+  // under a naive "year % 4 == 0".
+  EXPECT_FALSE(ClockMath::isLeapYear(1900));
+  EXPECT_TRUE(ClockMath::isLeapYear(2000));
+  EXPECT_FALSE(ClockMath::isLeapYear(2100));
+}
+
 TEST(OffsetMinutesFromBiasedQuarters, DecodesBiasedValue) {
   EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(48), 0);      // UTC+0
   EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(76), 7 * 60); // UTC+7

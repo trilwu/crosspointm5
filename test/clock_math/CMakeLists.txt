@@ -1,3 +1,3 @@
 add_executable(clock_math_tests test_clock_math.cpp)
-target_link_libraries(clock_math_tests PRIVATE gtest_main crosspoint_test_common)
+target_link_libraries(clock_math_tests PRIVATE GTest::gtest_main crosspoint_test_common)
 gtest_discover_tests(clock_math_tests)
