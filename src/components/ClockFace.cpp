@@ -56,28 +56,41 @@ bool ClockFace::draw(const GfxRenderer& renderer, const bool fullRefresh) {
     if (displayHour == 0) displayHour = 12;
   }
 
-  // Digit geometry, derived from the screen so it scales with orientation.
+  // Digit geometry is derived from the panel width and assumes a portrait-ish
+  // aspect; it does not adapt to orientation.
   const int dw = pageWidth / 6;
   const int dh = dw * 16 / 9;
   const int t = dw / 6;
   const int gap = dw / 6;
   const int colonW = dw / 3;
-  // Four gaps, not three: the draw sequence below advances by a gap after each of
-  // the two hour digits, the colon, and the first minute digit.
-  const int totalW = 4 * dw + 4 * gap + colonW;
-  int x = (pageWidth - totalW) / 2;
-  const int y = pageHeight / 2 - dh;
-
-  renderer.clearScreen();
 
   const int h10 = displayHour / 10;
   const int h1 = displayHour % 10;
   const int m10 = now.minute / 10;
   const int m1 = now.minute % 10;
+  // In 12-hour mode a leading zero hour reads as "1:05", not "01:05". Decide this
+  // before the geometry so the narrower glyph run stays centred: budgeting a slot
+  // we never draw would push the digits ~52px right of the text lines below.
+  // Consequence: the block shifts left/right by one digit slot at the 9->10 and
+  // 12->1 transitions, so those two minute-boundary repaints touch more pixels
+  // than the rest.
+  const bool hideLeadingZero = use12Hour && h10 == 0;
 
-  // In 12-hour mode a leading zero hour reads as "1:05", not "01:05".
-  if (!(use12Hour && h10 == 0)) drawDigit(renderer, h10, x, y, dw, dh, t);
-  x += dw + gap;
+  // One gap per slot, not one fewer: the draw sequence below advances by a gap
+  // after every digit slot and after the colon.
+  const int slots = hideLeadingZero ? 3 : 4;
+  const int totalW = slots * dw + slots * gap + colonW;
+  int x = (pageWidth - totalW) / 2;
+  // Clamp the origin so a landscape panel (wider than ~1.69:1) clips nothing.
+  int y = pageHeight / 2 - dh;
+  if (y < 0) y = 0;
+
+  renderer.clearScreen();
+
+  if (!hideLeadingZero) {
+    drawDigit(renderer, h10, x, y, dw, dh, t);
+    x += dw + gap;
+  }
   drawDigit(renderer, h1, x, y, dw, dh, t);
   x += dw + gap;
 
@@ -106,6 +119,14 @@ bool ClockFace::draw(const GfxRenderer& renderer, const bool fullRefresh) {
   snprintf(batteryBuf, sizeof(batteryBuf), "%u%%", static_cast<unsigned>(powerManager.getBatteryPercentage()));
   renderer.drawCenteredText(SMALL_FONT_ID, textY + dh / 6, batteryBuf);
 
-  renderer.displayBuffer(fullRefresh ? HalDisplay::FULL_REFRESH : HalDisplay::FAST_REFRESH);
+  // HALF, not FULL, for the clean-refresh path. Every other sleep screen in
+  // SleepActivity.cpp picks HALF deliberately (see the comment there about a
+  // FULL/GC waveform parking pixels in a different charge state). On this board's
+  // LgfxEpd driver Full and Half resolve to the same waveform, so FULL buys
+  // nothing; but on the SSD1677-class boards built from this same source FULL
+  // selects a multi-flash GC sequence, which would make the clock the only sleep
+  // screen that flashes on entry. HALF is a genuine clean refresh in its own
+  // right and clears the ghosting the periodic FAST repaints leave behind.
+  renderer.displayBuffer(fullRefresh ? HalDisplay::HALF_REFRESH : HalDisplay::FAST_REFRESH);
   return true;
 }
