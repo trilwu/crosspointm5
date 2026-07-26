@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <BoardConfig.h>
+#include <ClockMath.h>
 #include <Epub.h>
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
@@ -29,6 +30,7 @@
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
+#include "components/ClockFace.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/LoadingIcon.h"
@@ -42,6 +44,10 @@ FontDecompressor fontDecompressor;
 SdCardFontSystem sdFontSystem;
 FontCacheManager fontCacheManager(renderer.getFontMap(), renderer.getSdCardFonts());
 static unsigned long allowSleepAt = 0;
+// loop()'s inactivity timer. File-scope (rather than a loop()-local static) so the
+// light-sleep wake path can reset it: the whole sleep counts as inactivity, so
+// without a reset the auto-sleep test would fire again the instant we return.
+static unsigned long lastActivityTime = 0;
 
 // Fonts
 EpdFont notoserif14RegularFont(&notoserif_14_regular);
@@ -191,6 +197,92 @@ static bool loadSleepFrameBuffer() {
   return true;
 }
 
+// Light-sleep loop for touch-only boards. Blocks until the user touches the
+// screen, repainting the wall clock on each minute boundary while the CLOCK
+// sleep screen is selected. Unlike deep sleep this RETURNS: RAM is retained and
+// the caller resumes the UI in place instead of cold-booting.
+static void lightSleepUntilTouchWake() {
+  bool clockMode = SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::CLOCK && BoardConfig::hasRtc();
+  LOG_DBG("MAIN", "Entering light sleep (clock mode: %d)", static_cast<int>(clockMode));
+
+  // Repaint the clock with a cheap fast refresh each minute, and a full refresh
+  // once an hour to clear the ghosting those partial updates accumulate.
+  constexpr int MINUTES_PER_FULL_REFRESH = 60;
+  // Wake period when there is no clock to repaint. Deliberately not "touch only"
+  // (timeoutMs == 0): waking anyway lets us poll the touch controller over I2C,
+  // which is the only way in if the INT line never pulls the CPU out of sleep.
+  // An unwakeable device is the worst outcome here, and a once-a-minute I2C read
+  // is nothing next to the light-sleep floor.
+  constexpr uint32_t TOUCH_POLL_MS = 60U * 1000U;
+  int minutesSinceFullRefresh = 0;
+
+  for (;;) {
+    uint32_t timeoutMs = TOUCH_POLL_MS;
+    if (clockMode) {
+      // Align the next wake to the upcoming minute boundary so the displayed
+      // time flips exactly when it changes.
+      ClockMath::Date nowDate;
+      uint8_t second = 0;
+      if (halClock.getLocalDateTime(nowDate, second, SETTINGS.clockUtcOffsetQ)) {
+        timeoutMs = static_cast<uint32_t>(60 - (second % 60)) * 1000U;
+      } else {
+        // A never-synced RTC fails this read persistently, and ClockFace::draw()
+        // would then draw nothing. Stop trying rather than repaint-spin forever;
+        // the panel keeps whatever the sleep screen already put there.
+        LOG_DBG("MAIN", "RTC unreadable in light sleep; clock repaint disabled");
+        clockMode = false;
+      }
+    }
+
+    if (powerManager.lightSleepUntilTouch(timeoutMs) == HalPowerManager::WakeReason::Touch) break;
+
+    // Timer wake. Poll the touch controller before deciding it really was just a
+    // timer: see TOUCH_POLL_MS above.
+    gpio.update();
+    if (gpio.wasTouchActivity()) break;
+
+    if (!clockMode) continue;
+
+    // Repaint just the clock — no activity churn, and no "Going to sleep" popup.
+    const bool fullRefresh = ++minutesSinceFullRefresh >= MINUTES_PER_FULL_REFRESH;
+    if (fullRefresh) minutesSinceFullRefresh = 0;
+    ClockFace::draw(renderer, fullRefresh);
+  }
+
+  LOG_DBG("MAIN", "Woke from light sleep");
+  deepSleepInProgress = false;
+
+  // Re-arm the splash for the next cold boot. A quick-resume sleep cleared this
+  // expecting a wake-by-reset to consume it; light sleep never reboots, so left
+  // false the next cold boot would silently restore a long-stale frame.
+  APP_STATE.showBootScreen = true;
+
+  // Resume where the user was. goToSleep() already destroyed the outgoing
+  // activity, so the reader is the only one that can be rebuilt — from the same
+  // APP_STATE fields setup() uses after a deep-sleep wake, and with the same
+  // crash guard (a successful load clears readerActivityLoadCount).
+  const bool resumeReader = APP_STATE.lastSleepFromReader && !APP_STATE.openEpubPath.empty() &&
+                            APP_STATE.readerActivityLoadCount == 0;
+  std::string bookPath;
+  if (resumeReader) {
+    bookPath = APP_STATE.openEpubPath;
+    APP_STATE.openEpubPath.clear();
+    APP_STATE.readerActivityLoadCount++;
+  }
+  APP_STATE.saveToFile();
+
+  // The device was "inactive" for the whole sleep; without this the auto-sleep
+  // test at the top of loop() fires before the resumed activity is even created.
+  lastActivityTime = millis();
+  allowSleepAt = millis() + 2000;
+
+  if (resumeReader) {
+    activityManager.goToReader(bookPath);
+  } else {
+    activityManager.goHome();
+  }
+}
+
 // Enter deep sleep mode
 void enterDeepSleep(bool fromTimeout = false) {
   HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for sleep preparation
@@ -221,6 +313,28 @@ void enterDeepSleep(bool fromTimeout = false) {
   }
 
   halTiltSensor.deepSleep();
+
+  // Touch-only boards (no nav buttons, no power-button GPIO) cannot use deep sleep:
+  // their touch INT is not an RTC-capable pin, so nothing could wake the device.
+  // Use light sleep instead — RAM is retained, so this call RETURNS and we resume
+  // the previous activity in place rather than cold-booting.
+  //
+  // The power-GPIO test is load-bearing, not decoration: the LilyGo T5 Pro is also
+  // touch with no nav-button GPIOs, but its power button is on GPIO0 — RTC-capable,
+  // so its deep sleep wakes fine and must not be swapped for a much thirstier light
+  // sleep. Only a board with no wakeable input at all (M5Paper S3, whose power
+  // button goes to the AXP2101) needs this path.
+  //
+  // display.deepSleep() is deliberately skipped on this path: it issues the panel
+  // controller's sleep command (LgfxEpdDriver -> g_dev.sleep()), after which the
+  // driver would have to be re-initialised before it could be drawn to again — and
+  // the per-minute clock repaint below needs to drive it. Light sleep retains that
+  // state, so leaving the panel initialised is both safe and required.
+  if (BoardConfig::hasTouch() && !BoardConfig::hasNavButtons() && BoardConfig::ACTIVE.input.power < 0) {
+    lightSleepUntilTouchWake();
+    return;
+  }
+
   display.deepSleep();
   LOG_DBG("MAIN", "Entering deep sleep");
 
@@ -442,6 +556,7 @@ void setup() {
   // Ensure we're not still holding the power button before leaving setup
   waitForPowerRelease();
   allowSleepAt = millis() + 2000;
+  lastActivityTime = millis();  // start the inactivity timer from the end of boot
 }
 
 void loop() {
@@ -479,7 +594,6 @@ void loop() {
   }
 
   // Check for any user activity (button press or release) or active background work
-  static unsigned long lastActivityTime = millis();
   if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || gpio.wasTouchActivity() || halTiltSensor.hadActivity() ||
       activityManager.preventAutoSleep()) {
     lastActivityTime = millis();         // Reset inactivity timer

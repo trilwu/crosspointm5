@@ -4,6 +4,7 @@
 #include <Logging.h>
 #include <PowerManager.h>
 #include <WiFi.h>
+#include <driver/gpio.h>
 #include <esp_sleep.h>
 #include <soc/soc_caps.h>
 
@@ -106,6 +107,44 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
   // Waits for the power button to be physically released (so holding it doesn't
   // immediately wake the device again), then arms the wake source and sleeps.
   freeink::PowerManager::deepSleepUntilPowerButton();
+}
+
+HalPowerManager::WakeReason HalPowerManager::lightSleepUntilTouch(const uint32_t timeoutMs) const {
+  const int8_t touchInt = BoardConfig::ACTIVE.touch.irq;
+
+  // The GT911 INT idles HIGH (InputManager leaves it INPUT_PULLUP after the wakeup
+  // sequence) and is pulled LOW when a touch is reported, so wake on the low level.
+  if (touchInt >= 0) {
+    const auto pin = static_cast<gpio_num_t>(touchInt);
+    gpio_wakeup_enable(pin, GPIO_INTR_LOW_LEVEL);
+    esp_sleep_enable_gpio_wakeup();
+  }
+
+  if (timeoutMs > 0) {
+    esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(timeoutMs) * 1000ULL);
+  } else {
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+  }
+
+  const esp_err_t err = esp_light_sleep_start();
+  const esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+
+  // Disarm so the next call starts from a known state.
+  if (touchInt >= 0) {
+    gpio_wakeup_disable(static_cast<gpio_num_t>(touchInt));
+  }
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+
+  if (err != ESP_OK) {
+    // Sleep was rejected because a wake source was already asserted — a finger
+    // still resting on the panel holds INT low. esp_sleep_get_wakeup_cause() then
+    // still reports the *previous* sleep, so don't trust it: report Touch, which
+    // returns the caller to the UI (where the touch is handled normally).
+    LOG_DBG("PWR", "Light sleep rejected (err=%d)", static_cast<int>(err));
+    return WakeReason::Touch;
+  }
+
+  return (cause == ESP_SLEEP_WAKEUP_TIMER) ? WakeReason::Timer : WakeReason::Touch;
 }
 
 uint16_t HalPowerManager::getBatteryPercentage() const {

@@ -42,6 +42,17 @@ class HalPowerManager {
   // Should be called inside main loop() to handle the currentLockMode
   void startDeepSleep(HalGPIO& gpio) const;
 
+  // Why lightSleepUntilTouch() returned.
+  enum class WakeReason { Touch, Timer };
+
+  // Light sleep (RAM retained, instant resume) until the touch controller asserts
+  // its INT line, or until timeoutMs elapses (0 = wait for touch only).
+  //
+  // Deep sleep is not usable on a touch-only board whose GT911 INT is GPIO48:
+  // only GPIO0-21 are RTC-capable on the ESP32-S3, so deep sleep could never wake
+  // on touch. Light sleep can wake on any GPIO.
+  WakeReason lightSleepUntilTouch(uint32_t timeoutMs) const;
+
   // Get battery percentage (range 0-100)
   uint16_t getBatteryPercentage() const;
 
