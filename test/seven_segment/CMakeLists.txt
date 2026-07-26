@@ -1,0 +1,3 @@
+add_executable(seven_segment_tests test_seven_segment.cpp)
+target_link_libraries(seven_segment_tests PRIVATE GTest::gtest_main crosspoint_test_common)
+gtest_discover_tests(seven_segment_tests)
