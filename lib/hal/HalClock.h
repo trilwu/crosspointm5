@@ -32,8 +32,10 @@ class HalClock {
   // The UTC offset is applied calendar-correctly (the date rolls across midnight),
   // unlike formatTime() which only wraps hours/minutes.
   // `secondOut` receives the RTC seconds (used to align a refresh to the next minute).
-  // utcOffsetQuarterHoursBiased: biased quarter-hour offset (48 = UTC+0).
-  // Returns false if the RTC is not available or the read failed.
+  // utcOffsetQuarterHoursBiased: biased quarter-hour offset (48 = UTC+0, 0 = UTC-12, 104 = UTC+14; >104 clamped).
+  // Returns false if the RTC is not available or the read failed — including a never-set or
+  // low-voltage RTC whose oscillator has stopped, where isAvailable() is still true and this
+  // keeps returning false until the clock is synced once.
   bool getLocalDateTime(ClockMath::Date& out, uint8_t& secondOut, uint8_t utcOffsetQuarterHoursBiased = 48) const;
 
   // Format time into a caller-provided buffer.
