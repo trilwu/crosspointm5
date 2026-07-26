@@ -25,6 +25,20 @@ TEST(SegmentsForDigit, EightLightsEverySegment) {
   }
 }
 
+TEST(SegmentsForDigit, EveryDigitHasADistinctPattern) {
+  // Two digits sharing a mask would render identically on the panel — a fault the
+  // per-digit literals above only imply, never state.
+  for (int i = 0; i <= 9; ++i) {
+    for (int j = i + 1; j <= 9; ++j) {
+      EXPECT_NE(segmentsForDigit(i), segmentsForDigit(j)) << i << " vs " << j;
+    }
+  }
+}
+
+// The caller draws from a constant expression, so usability at compile time is part
+// of the contract; the runtime EXPECT_EQs above would not notice if it were lost.
+static_assert(segmentsForDigit(8) == 0x7F, "must be usable in a constant expression");
+
 TEST(SegmentsForDigit, OutOfRangeIsBlank) {
   EXPECT_EQ(segmentsForDigit(-1), 0x00);
   EXPECT_EQ(segmentsForDigit(10), 0x00);
