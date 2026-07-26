@@ -361,6 +361,19 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
   }();
 
   std::vector<SettingInfo> v = baseList;
+  // Boards with an RTC gain a wall-clock sleep screen. The option list is
+  // positional (index == SLEEP_SCREEN_MODE value), so CLOCK is appended last.
+  if (BoardConfig::hasRtc()) {
+    auto it = std::find_if(v.begin(), v.end(),
+                           [](const SettingInfo& s) { return s.nameId == StrId::STR_SLEEP_SCREEN; });
+    if (it != v.end()) {
+      *it = SettingInfo::Enum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen,
+                              {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER,
+                               StrId::STR_COVER_CUSTOM, StrId::STR_NONE_OPT, StrId::STR_QUICK_RESUME,
+                               StrId::STR_CLOCK},
+                              "sleepScreen", StrId::STR_CAT_DISPLAY);
+    }
+  }
   if (!BoardConfig::hasTouch()) {
     v.erase(std::remove_if(v.begin(), v.end(),
                            [](const SettingInfo& s) { return s.nameId == StrId::STR_TOUCH_READER_CONTROLS; }),

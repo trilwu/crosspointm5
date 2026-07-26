@@ -21,6 +21,10 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     COVER_CUSTOM = 4,
     BLANK = 5,
     QUICK_RESUME = 6,
+    // Big wall clock, refreshed once a minute while asleep. Appended last so
+    // existing persisted sleepScreen values keep their meaning. Only offered on
+    // boards with an RTC (see SettingsList.h).
+    CLOCK = 7,
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
