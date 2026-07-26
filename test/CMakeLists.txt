@@ -29,11 +29,18 @@ target_include_directories(crosspoint_test_common INTERFACE
   ${REPO_ROOT}
   ${REPO_ROOT}/lib
 )
-target_compile_options(crosspoint_test_common INTERFACE
-  -Wall
-  -Wextra
-  -pedantic
-)
+# GCC/Clang warning flags are not valid for MSVC, which rejects them as a hard
+# error (D8021), so the whole suite fails to build on a Windows/MSVC host. Use the
+# nearest MSVC equivalent there instead.
+if(MSVC)
+  target_compile_options(crosspoint_test_common INTERFACE /W4)
+else()
+  target_compile_options(crosspoint_test_common INTERFACE
+    -Wall
+    -Wextra
+    -pedantic
+  )
+endif()
 
 enable_testing()
 include(GoogleTest)
