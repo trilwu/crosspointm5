@@ -11,6 +11,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "activities/reader/ReaderUtils.h"
+#include "components/ClockFace.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/Logo120.h"
@@ -50,6 +51,8 @@ void SleepActivity::onEnter() {
       } else {
         return renderCustomSleepScreen();
       }
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::CLOCK):
+      return renderClockSleepScreen();
     default:
       return renderDefaultSleepScreen();
   }
@@ -338,4 +341,13 @@ void SleepActivity::renderLastScreenSleepScreen() const {
 void SleepActivity::renderBlankSleepScreen() const {
   renderer.clearScreen();
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+}
+
+// Wall-clock sleep screen. Falls back to the default screen when the RTC is
+// missing or unreadable, so the device never sleeps on a blank panel.
+void SleepActivity::renderClockSleepScreen() const {
+  if (!ClockFace::draw(renderer, /*fullRefresh=*/true)) {
+    LOG_DBG("SLP", "Clock sleep screen requested but RTC unavailable; using default");
+    renderDefaultSleepScreen();
+  }
 }
