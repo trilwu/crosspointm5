@@ -366,12 +366,12 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
   if (BoardConfig::hasRtc()) {
     auto it = std::find_if(v.begin(), v.end(),
                            [](const SettingInfo& s) { return s.nameId == StrId::STR_SLEEP_SCREEN; });
-    if (it != v.end()) {
-      *it = SettingInfo::Enum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen,
-                              {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER,
-                               StrId::STR_COVER_CUSTOM, StrId::STR_NONE_OPT, StrId::STR_QUICK_RESUME,
-                               StrId::STR_CLOCK},
-                              "sleepScreen", StrId::STR_CAT_DISPLAY);
+    // Append rather than restate the base labels: a second copy would silently drift
+    // if the base list is ever edited. The size check makes the positional invariant
+    // self-enforcing — if the base list grows, skip the append instead of misaligning
+    // every persisted sleepScreen value.
+    if (it != v.end() && it->enumValues.size() == CrossPointSettings::CLOCK) {
+      it->enumValues.push_back(StrId::STR_CLOCK);
     }
   }
   if (!BoardConfig::hasTouch()) {
