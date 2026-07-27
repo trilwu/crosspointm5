@@ -145,8 +145,9 @@ void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const 
   // Reserve space for the widest possible percentage text ("100%") so the title truncation
   // width accounts for it, avoiding overlap when the digit count changes (e.g. 100% -> 99%).
   int batteryGroupLeftX = batteryIconX;
+  int maxPercentTextWidth = 0;
   if (showBatteryPercentage) {
-    const int maxPercentTextWidth = renderer.getTextWidth(SMALL_FONT_ID, "100%");
+    maxPercentTextWidth = renderer.getTextWidth(SMALL_FONT_ID, "100%");
     batteryGroupLeftX -= maxPercentTextWidth + batteryPercentSpacing;
   }
 
@@ -172,6 +173,12 @@ void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const 
     renderer.drawText(kSubtitleFontId, textX, titleY + titleLineHeight + kSubtitleGap, truncatedSubtitle.c_str(),
                       true, EpdFontFamily::REGULAR);
   }
+
+  // Clear the battery region (icon + widest possible percentage text) before drawing, so a
+  // partial refresh going from e.g. 100% -> 99% doesn't leave a stale third glyph behind.
+  const int clearX = batteryIconX - (showBatteryPercentage ? maxPercentTextWidth + batteryPercentSpacing : 0);
+  const int clearW = batteryIconX + SlateMetrics::values.batteryWidth - clearX;
+  renderer.fillRect(clearX, rect.y, clearW, rect.height, false);
 
   drawBatteryRight(renderer,
                    Rect{batteryIconX,
