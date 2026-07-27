@@ -6,6 +6,11 @@
 #include <string>
 
 #include "CrossPointSettings.h"
+#include "components/icons/book24.h"
+#include "components/icons/file24.h"
+#include "components/icons/folder24.h"
+#include "components/icons/image24.h"
+#include "components/icons/text24.h"
 #include "fontIds.h"
 
 namespace {
@@ -19,6 +24,27 @@ constexpr int kSubtitleGap = 4;
 // from the y it's given (while drawing the percentage text at the unshifted
 // y). Subtract it here so the icon itself ends up centered in the header.
 constexpr int kBatteryIconInternalOffsetY = 6;
+constexpr int kListIconSize = 24;
+constexpr int kIconTextGap = 10;
+
+// FileBrowserActivity is the only caller that passes rowIcon today, and it only
+// ever hands back Folder/Book/Text/Image/File — the 24px set covers all of those.
+const uint8_t* iconBitmapFor(const UIIcon icon) {
+  switch (icon) {
+    case UIIcon::Folder:
+      return Folder24Icon;
+    case UIIcon::Book:
+      return Book24Icon;
+    case UIIcon::Text:
+      return Text24Icon;
+    case UIIcon::Image:
+      return Image24Icon;
+    case UIIcon::File:
+      return File24Icon;
+    default:
+      return nullptr;
+  }
+}
 
 void drawSlateScrollBar(const GfxRenderer& renderer, const Rect rect, const int itemCount, const int pageStartIndex,
                         const int pageItems) {
@@ -55,7 +81,6 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
                           const std::function<UIIcon(int index)>& rowIcon,
                           const std::function<std::string(int index)>& rowValue, const bool highlightValue,
                           const std::function<bool(int index)>& rowDimmed) const {
-  (void)rowIcon;
   (void)highlightValue;
 
   const bool hasSubtitle = static_cast<bool>(rowSubtitle);
@@ -85,6 +110,19 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
 
     const bool inkOnLight = !isSelected;
     int textAreaWidth = rowWidth - kRowInsetX * 2;
+    int textStartX = rowX + kRowInsetX;
+
+    if (rowIcon) {
+      const uint8_t* iconBitmap = iconBitmapFor(rowIcon(i));
+      if (iconBitmap) {
+        const int iconY = rowY + (rowHeight - kListIconSize) / 2;
+        renderer.drawIcon(iconBitmap, textStartX, iconY, kListIconSize);
+      }
+      // Reserve the icon slot even when this particular row has no icon
+      // (iconBitmap == nullptr), so titles stay aligned column-to-column.
+      textStartX += kListIconSize + kIconTextGap;
+      textAreaWidth = std::max(0, textAreaWidth - kListIconSize - kIconTextGap);
+    }
 
     if (rowValue) {
       const std::string valueText = rowValue(i);
@@ -107,14 +145,14 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
     const std::string title = renderer.truncatedText(kTitleFontId, rowTitle(i).c_str(), textAreaWidth, titleStyle);
 
     if (!hasSubtitle) {
-      renderer.drawText(kTitleFontId, rowX + kRowInsetX, rowY + (rowHeight - titleLineHeight) / 2, title.c_str(),
+      renderer.drawText(kTitleFontId, textStartX, rowY + (rowHeight - titleLineHeight) / 2, title.c_str(),
                         inkOnLight, titleStyle);
       continue;
     }
 
     const std::string subtitleRaw = rowSubtitle(i);
     if (subtitleRaw.empty()) {
-      renderer.drawText(kTitleFontId, rowX + kRowInsetX, rowY + (rowHeight - titleLineHeight) / 2, title.c_str(),
+      renderer.drawText(kTitleFontId, textStartX, rowY + (rowHeight - titleLineHeight) / 2, title.c_str(),
                         inkOnLight, titleStyle);
       continue;
     }
@@ -123,8 +161,8 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
     const int titleY = rowY + (rowHeight - blockHeight) / 2;
     const std::string subtitle =
         renderer.truncatedText(kSubtitleFontId, subtitleRaw.c_str(), textAreaWidth, EpdFontFamily::REGULAR);
-    renderer.drawText(kTitleFontId, rowX + kRowInsetX, titleY, title.c_str(), inkOnLight, titleStyle);
-    renderer.drawText(kSubtitleFontId, rowX + kRowInsetX, titleY + titleLineHeight + kSubtitleGap, subtitle.c_str(),
+    renderer.drawText(kTitleFontId, textStartX, titleY, title.c_str(), inkOnLight, titleStyle);
+    renderer.drawText(kSubtitleFontId, textStartX, titleY + titleLineHeight + kSubtitleGap, subtitle.c_str(),
                       inkOnLight, EpdFontFamily::REGULAR);
   }
 
