@@ -40,6 +40,13 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
   items.push_back({MenuAction::GO_HOME, StrId::STR_GO_HOME_BUTTON});
   items.push_back({MenuAction::SYNC, StrId::STR_SYNC_PROGRESS});
   items.push_back({MenuAction::DELETE_CACHE, StrId::STR_DELETE_CACHE});
+  // Deliberately unconditional, unlike HomeActivity::showsSleepItem(), which hides
+  // the Home Sleep row on boards that have a power-button GPIO. The asymmetry is
+  // intentional and is about layout, not policy: the Home menu draws at fixed row
+  // positions, so on the smaller button-based panels a sixth row would overflow
+  // into the button-hints band. This menu is a scrolling, paginating list with no
+  // such ceiling. And on touch-only boards (M5Paper S3) this item is the primary
+  // way to sleep while reading, since there is no power button to hold.
   items.push_back({MenuAction::SLEEP, StrId::STR_SLEEP});
   return items;
 }
