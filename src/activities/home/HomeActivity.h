@@ -1,4 +1,6 @@
 #pragma once
+#include <BoardConfig.h>
+
 #include <functional>
 #include <vector>
 
@@ -33,6 +35,13 @@ class HomeActivity final : public Activity {
   std::vector<RecentBook> recentBooks;
   const HomeMenuItem initialMenuItem;
 
+  // The Sleep row only exists on boards with no power-button GPIO: where a
+  // physical power button exists, holding it already sleeps the device, so the
+  // row is redundant there -- and those button-based panels are exactly the ones
+  // whose fixed-height, unpaged home menu would overflow into the button-hints
+  // band with a sixth row. Single source of truth for the four call sites below.
+  static bool showsSleepItem() { return BoardConfig::ACTIVE.input.power < 0; }
+
   // Convert HomeMenuItem to menu index (used in onEnter)
   static int menuItemToIndex(HomeMenuItem item, bool hasOpdsUrl) {
     int i = 0;
@@ -46,7 +55,7 @@ class HomeActivity final : public Activity {
     ++i;
     if (item == HomeMenuItem::SETTINGS_MENU) return i;
     ++i;
-    if (item == HomeMenuItem::SLEEP) return i;
+    if (item == HomeMenuItem::SLEEP) return showsSleepItem() ? i : 0;
     return 0;
   }
 
@@ -58,7 +67,7 @@ class HomeActivity final : public Activity {
     if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
     if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
     if (idx == i++) return HomeMenuItem::SETTINGS_MENU;
-    if (idx == i) return HomeMenuItem::SLEEP;
+    if (showsSleepItem() && idx == i) return HomeMenuItem::SLEEP;
     return HomeMenuItem::NONE;
   }
   void onSelectBook(const std::string& path);

@@ -21,11 +21,14 @@
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 5;  // File Browser, Recents, File transfer, Settings, Sleep
+  int count = 4;  // File Browser, Recents, File transfer, Settings
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
   if (hasOpdsServers) {
+    count++;
+  }
+  if (showsSleepItem()) {
     count++;
   }
   return count;
@@ -303,25 +306,43 @@ void HomeActivity::render(RenderLock&&) {
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
-  // Build menu items dynamically
-  std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_FILE_TRANSFER),
-                                        tr(STR_SETTINGS_TITLE), tr(STR_SLEEP)};
-  // UIIcon has no sleep glyph, so Sleep uses None and renders without an icon.
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Settings, None};
-  // Final size is at most the 5 fixed rows plus OPDS and Continue Reading, so
-  // reserving here keeps the inserts below from reallocating.
-  menuItems.reserve(7);
-  menuIcons.reserve(7);
-
-  if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + 2, tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + 2, Library);
-  }
+  // Build the menu in final display order: reserving before any element is
+  // appended costs exactly one allocation, where the previous initializer-list
+  // plus reserve() plus insert() shape paid for two on every render. The row
+  // order below must stay in step with menuItemToIndex/indexToMenuItem.
+  // Maximum row set: Continue Reading, Browse, Recents, OPDS, Transfer,
+  // Settings, Sleep.
+  constexpr size_t kMaxMenuRows = 7;
+  std::vector<const char*> menuItems;
+  std::vector<UIIcon> menuIcons;
+  menuItems.reserve(kMaxMenuRows);
+  menuIcons.reserve(kMaxMenuRows);
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
-    // Insert Continue Reading at the top if enabled in theme
-    menuItems.insert(menuItems.begin(), tr(STR_CONTINUE_READING));
-    menuIcons.insert(menuIcons.begin(), Book);
+    // Continue Reading sits at the top when enabled in the theme
+    menuItems.push_back(tr(STR_CONTINUE_READING));
+    menuIcons.push_back(Book);
+  }
+
+  menuItems.push_back(tr(STR_BROWSE_FILES));
+  menuIcons.push_back(Folder);
+  menuItems.push_back(tr(STR_MENU_RECENT_BOOKS));
+  menuIcons.push_back(Recent);
+
+  if (hasOpdsServers) {
+    menuItems.push_back(tr(STR_OPDS_BROWSER));
+    menuIcons.push_back(Library);
+  }
+
+  menuItems.push_back(tr(STR_FILE_TRANSFER));
+  menuIcons.push_back(Transfer);
+  menuItems.push_back(tr(STR_SETTINGS_TITLE));
+  menuIcons.push_back(Settings);
+
+  if (showsSleepItem()) {
+    // UIIcon has no sleep glyph, so Sleep uses None and renders without an icon.
+    menuItems.push_back(tr(STR_SLEEP));
+    menuIcons.push_back(None);
   }
 
   GUI.drawButtonMenu(
