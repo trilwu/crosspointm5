@@ -133,8 +133,6 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
 
 void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const char* title,
                             const char* subtitle) const {
-  if (!title) return;
-
   const int sidePadding = SlateMetrics::values.contentSidePadding;
   const int textX = rect.x + sidePadding;
 
@@ -150,6 +148,23 @@ void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const 
     maxPercentTextWidth = renderer.getTextWidth(SMALL_FONT_ID, "100%");
     batteryGroupLeftX -= maxPercentTextWidth + batteryPercentSpacing;
   }
+
+  // Clear the battery region (icon + widest possible percentage text) before drawing, so a
+  // partial refresh going from e.g. 100% -> 99% doesn't leave a stale third glyph behind.
+  const int clearX = batteryIconX - (showBatteryPercentage ? maxPercentTextWidth + batteryPercentSpacing : 0);
+  const int clearW = batteryIconX + SlateMetrics::values.batteryWidth - clearX;
+  renderer.fillRect(clearX, rect.y, clearW, rect.height, false);
+
+  drawBatteryRight(renderer,
+                   Rect{batteryIconX,
+                        rect.y + (rect.height - SlateMetrics::values.batteryHeight) / 2 -
+                            kBatteryIconInternalOffsetY,
+                        SlateMetrics::values.batteryWidth, SlateMetrics::values.batteryHeight},
+                   showBatteryPercentage);
+
+  // A fresh device with no recent books passes a null title (see HomeActivity); the
+  // battery above must still be drawn in that case, so this check comes after it.
+  if (!title) return;
 
   constexpr int kBatteryTitleGap = 20;
   const int maxWidth = std::max(0, batteryGroupLeftX - kBatteryTitleGap - textX);
@@ -173,19 +188,6 @@ void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const 
     renderer.drawText(kSubtitleFontId, textX, titleY + titleLineHeight + kSubtitleGap, truncatedSubtitle.c_str(),
                       true, EpdFontFamily::REGULAR);
   }
-
-  // Clear the battery region (icon + widest possible percentage text) before drawing, so a
-  // partial refresh going from e.g. 100% -> 99% doesn't leave a stale third glyph behind.
-  const int clearX = batteryIconX - (showBatteryPercentage ? maxPercentTextWidth + batteryPercentSpacing : 0);
-  const int clearW = batteryIconX + SlateMetrics::values.batteryWidth - clearX;
-  renderer.fillRect(clearX, rect.y, clearW, rect.height, false);
-
-  drawBatteryRight(renderer,
-                   Rect{batteryIconX,
-                        rect.y + (rect.height - SlateMetrics::values.batteryHeight) / 2 -
-                            kBatteryIconInternalOffsetY,
-                        SlateMetrics::values.batteryWidth, SlateMetrics::values.batteryHeight},
-                   showBatteryPercentage);
 }
 
 void SlateTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const int buttonCount,
