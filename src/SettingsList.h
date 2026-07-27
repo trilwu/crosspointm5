@@ -364,8 +364,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
   // Boards with an RTC gain a wall-clock sleep screen. The option list is
   // positional (index == SLEEP_SCREEN_MODE value), so CLOCK is appended last.
   if (BoardConfig::hasRtc()) {
-    auto it = std::find_if(v.begin(), v.end(),
-                           [](const SettingInfo& s) { return s.nameId == StrId::STR_SLEEP_SCREEN; });
+    auto it =
+        std::find_if(v.begin(), v.end(), [](const SettingInfo& s) { return s.nameId == StrId::STR_SLEEP_SCREEN; });
     // Append rather than restate the base labels: a second copy would silently drift
     // if the base list is ever edited. The size check makes the positional invariant
     // self-enforcing — if the base list grows, skip the append instead of misaligning

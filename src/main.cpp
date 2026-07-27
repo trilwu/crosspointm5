@@ -291,8 +291,8 @@ static void lightSleepUntilTouchWake() {
   // activity, so the reader is the only one that can be rebuilt — from the same
   // APP_STATE fields setup() uses after a deep-sleep wake, and with the same
   // crash guard (a successful load clears readerActivityLoadCount).
-  const bool resumeReader = APP_STATE.lastSleepFromReader && !APP_STATE.openEpubPath.empty() &&
-                            APP_STATE.readerActivityLoadCount == 0;
+  const bool resumeReader =
+      APP_STATE.lastSleepFromReader && !APP_STATE.openEpubPath.empty() && APP_STATE.readerActivityLoadCount == 0;
   std::string bookPath;
   if (resumeReader) {
     bookPath = APP_STATE.openEpubPath;
@@ -369,8 +369,7 @@ void enterDeepSleep(bool fromTimeout = false) {
   // so leaving the panel initialised is both safe and required.
   const bool clockSleep = SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::CLOCK &&
                           BoardConfig::hasRtc() && !isQuickResumeSleep;
-  if (clockSleep && BoardConfig::hasTouch() && !BoardConfig::hasNavButtons() &&
-      BoardConfig::ACTIVE.input.power < 0) {
+  if (clockSleep && BoardConfig::hasTouch() && !BoardConfig::hasNavButtons() && BoardConfig::ACTIVE.input.power < 0) {
     lightSleepUntilTouchWake();
     return;
   }

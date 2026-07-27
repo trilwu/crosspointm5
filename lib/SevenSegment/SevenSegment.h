@@ -29,17 +29,28 @@ constexpr uint8_t SEG_G = 0x40;
 // Returns the lit-segment bitmask for `digit`, or 0 when out of range.
 constexpr uint8_t segmentsForDigit(int digit) {
   switch (digit) {
-    case 0: return SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F;
-    case 1: return SEG_B | SEG_C;
-    case 2: return SEG_A | SEG_B | SEG_D | SEG_E | SEG_G;
-    case 3: return SEG_A | SEG_B | SEG_C | SEG_D | SEG_G;
-    case 4: return SEG_B | SEG_C | SEG_F | SEG_G;
-    case 5: return SEG_A | SEG_C | SEG_D | SEG_F | SEG_G;
-    case 6: return SEG_A | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G;
-    case 7: return SEG_A | SEG_B | SEG_C;
-    case 8: return SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G;
-    case 9: return SEG_A | SEG_B | SEG_C | SEG_D | SEG_F | SEG_G;
-    default: return 0;
+    case 0:
+      return SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F;
+    case 1:
+      return SEG_B | SEG_C;
+    case 2:
+      return SEG_A | SEG_B | SEG_D | SEG_E | SEG_G;
+    case 3:
+      return SEG_A | SEG_B | SEG_C | SEG_D | SEG_G;
+    case 4:
+      return SEG_B | SEG_C | SEG_F | SEG_G;
+    case 5:
+      return SEG_A | SEG_C | SEG_D | SEG_F | SEG_G;
+    case 6:
+      return SEG_A | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G;
+    case 7:
+      return SEG_A | SEG_B | SEG_C;
+    case 8:
+      return SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G;
+    case 9:
+      return SEG_A | SEG_B | SEG_C | SEG_D | SEG_F | SEG_G;
+    default:
+      return 0;
   }
 }
 

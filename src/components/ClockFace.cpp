@@ -1,6 +1,7 @@
 #include "components/ClockFace.h"
 
 #include <BoardConfig.h>
+#include <ClockMath.h>
 #include <GfxRenderer.h>
 #include <HalClock.h>
 #include <HalDisplay.h>
@@ -9,7 +10,6 @@
 
 #include <cstdio>
 
-#include <ClockMath.h>
 #include "CrossPointSettings.h"
 #include "fontIds.h"
 
@@ -29,8 +29,7 @@ void drawDigit(const GfxRenderer& renderer, int digit, int x, int y, int w, int 
 }
 
 const char* monthAbbrev(uint8_t month) {
-  static const char* kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  static const char* kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
   return (month >= 1 && month <= 12) ? kMonths[month - 1] : "";
 }
 

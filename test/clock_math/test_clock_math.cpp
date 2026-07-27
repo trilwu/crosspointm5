@@ -106,10 +106,10 @@ TEST(IsLeapYear, HandlesCenturyRule) {
 }
 
 TEST(OffsetMinutesFromBiasedQuarters, DecodesBiasedValue) {
-  EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(48), 0);      // UTC+0
-  EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(76), 7 * 60); // UTC+7
-  EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(0), -12 * 60); // UTC-12
-  EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(104), 14 * 60); // UTC+14
+  EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(48), 0);         // UTC+0
+  EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(76), 7 * 60);    // UTC+7
+  EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(0), -12 * 60);   // UTC-12
+  EXPECT_EQ(ClockMath::offsetMinutesFromBiasedQuarters(104), 14 * 60);  // UTC+14
 }
 
 TEST(OffsetMinutesFromBiasedQuarters, ClampsCorruptedValue) {
