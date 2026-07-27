@@ -80,6 +80,11 @@ class HalGPIO {
   unsigned long lastTouchHeldMs() const;
   bool wasSwipe(float& nxStart, float& nyStart, float& nxEnd, float& nyEnd) const;
   bool wasTouchActivity() const;
+  // Re-run the touch controller's INT wake toggle. Only meaningful for the
+  // reset-less GT911, which can drift into a low-power state and stop reporting
+  // touches; begin() runs it once, long-running sleep loops re-run it. Drives the
+  // INT pin as an output, so it must not be called while an INT wake source is armed.
+  void wakeTouchController();
   void setSharedConfirmPowerShortPressEmitsPower(bool enabled);
 
   // Verify power button was held long enough after wakeup.
