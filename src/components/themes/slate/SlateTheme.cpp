@@ -117,11 +117,11 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
       if (iconBitmap) {
         const int iconY = rowY + (rowHeight - kListIconSize) / 2;
         renderer.drawIcon(iconBitmap, textStartX, iconY, kListIconSize);
+        // Only reserve the icon slot when a bitmap actually exists; otherwise
+        // the gutter is blank and the title loses that width for nothing.
+        textStartX += kListIconSize + kIconTextGap;
+        textAreaWidth = std::max(0, textAreaWidth - kListIconSize - kIconTextGap);
       }
-      // Reserve the icon slot even when this particular row has no icon
-      // (iconBitmap == nullptr), so titles stay aligned column-to-column.
-      textStartX += kListIconSize + kIconTextGap;
-      textAreaWidth = std::max(0, textAreaWidth - kListIconSize - kIconTextGap);
     }
 
     if (rowValue) {
