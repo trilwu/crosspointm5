@@ -25,7 +25,8 @@ void drawSlateScrollBar(const GfxRenderer& renderer, const Rect rect, const int 
   const int thumbH = std::max(16, (barH * pageItems) / itemCount);
   const int maxStart = std::max(1, itemCount - pageItems);
   const int maxTravel = std::max(1, barH - thumbH);
-  const int thumbY = rect.y + (pageStartIndex * maxTravel) / maxStart;
+  const int clampedStart = std::clamp(pageStartIndex, 0, maxStart);
+  const int thumbY = rect.y + (clampedStart * maxTravel) / maxStart;
 
   renderer.fillRoundedRect(barX, thumbY, barW, thumbH, barW / 2, Color::Black);
 }
