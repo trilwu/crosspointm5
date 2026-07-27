@@ -216,11 +216,16 @@ static void lightSleepUntilTouchWake() {
   constexpr uint32_t TOUCH_POLL_MS = 60U * 1000U;
   // How many timer wakes (~1 minute each) between GT911 wake toggles. See below.
   constexpr int TIMER_WAKES_PER_TOUCH_REWAKE = 30;
+  // How many unconfirmed "Touch" verdicts to tolerate before waking anyway. See the
+  // rejected-sleep handling below: this is the escape hatch that stops a mis-armed
+  // wake source from trapping the user in a loop they cannot get out of.
+  constexpr int MAX_SPURIOUS_WAKES = 5;
   // Runtime guard: the RTC can start failing, or a repaint can silently draw
   // nothing, long after the entry gate decided this was a clock sleep.
   bool clockRepaintEnabled = true;
   int minutesSinceFullRefresh = 0;
   int timerWakesSinceRewake = 0;
+  int spuriousWakes = 0;
 
   // Flush any stale touch level before the loop. touchPressed is a persistent
   // member and only the per-update event flags are cleared, so a finger still down
@@ -246,7 +251,21 @@ static void lightSleepUntilTouchWake() {
       }
     }
 
-    if (powerManager.lightSleepUntilTouch(timeoutMs) == HalPowerManager::WakeReason::Touch) break;
+    if (powerManager.lightSleepUntilTouch(timeoutMs) == HalPowerManager::WakeReason::Touch) {
+      // A *rejected* sleep also reports Touch: esp_light_sleep_start() refuses when
+      // the wake source is already asserted, and it cannot say which one, so the
+      // verdict is a guess. That guess is exactly wrong if the GT911 INT idles LOW
+      // (the polarity is inferred, never measured) — every sleep would be rejected
+      // and this loop would exit on its first iteration, making sleep look broken
+      // rather than merely slow. Confirm a real touch over I2C before believing it.
+      gpio.update();
+      if (gpio.wasTouchActivity() || ++spuriousWakes > MAX_SPURIOUS_WAKES) break;
+      // The counter above is the escape hatch: never trap the user in a loop they
+      // cannot exit. Back off briefly so an unsleepable board polls, not spins.
+      delay(200);
+      continue;
+    }
+    spuriousWakes = 0;
 
     // Timer wake. Nudge the touch controller back into active scanning every so
     // often: a reset-less GT911 can drift into its low-power state during a long
