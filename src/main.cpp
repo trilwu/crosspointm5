@@ -664,6 +664,14 @@ void loop() {
     screenshotComboActive = false;
   }
 
+  // A UI action asked us to sleep (the device has no power button).
+  if (APP_STATE.sleepRequested) {
+    APP_STATE.sleepRequested = false;
+    LOG_DBG("SLP", "Manual sleep requested");
+    enterDeepSleep(false);
+    return;
+  }
+
   const unsigned long sleepTimeoutMs = SETTINGS.getSleepTimeoutMs();
   if (sleepTimeoutMs > 0 && millis() - lastActivityTime >= sleepTimeoutMs) {
     LOG_DBG("SLP", "Auto-sleep triggered after %lu ms of inactivity", sleepTimeoutMs);

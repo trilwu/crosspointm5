@@ -20,6 +20,10 @@ class CrossPointState : public PersistableStore<CrossPointState> {
   uint8_t readerActivityLoadCount = 0;
   bool lastSleepFromReader = false;
   bool showBootScreen = true;
+  // Set by a UI action (e.g. the reader/Home "Sleep" item) to ask the main loop to
+  // sleep at the next safe point. Not persisted: it is a per-run request, so it is
+  // deliberately absent from toJson/fromJson.
+  bool sleepRequested = false;
 
   static const char* getFilePath() { return "/.crosspoint/state.json"; }
   void toJson(JsonDocument& doc) const;

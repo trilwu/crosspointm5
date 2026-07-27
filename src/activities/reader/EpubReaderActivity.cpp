@@ -842,6 +842,12 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       onGoHome();
       return;
     }
+    case EpubReaderMenuActivity::MenuAction::SLEEP: {
+      // The main loop owns the sleep sequence (it must save state and tear down
+      // WiFi first), so just request it here.
+      APP_STATE.sleepRequested = true;
+      return;
+    }
     case EpubReaderMenuActivity::MenuAction::DELETE_CACHE: {
       {
         RenderLock lock(*this);
