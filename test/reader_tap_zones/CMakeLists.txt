@@ -1,0 +1,3 @@
+add_executable(reader_tap_zones_tests test_reader_tap_zones.cpp)
+target_link_libraries(reader_tap_zones_tests PRIVATE GTest::gtest_main crosspoint_test_common)
+gtest_discover_tests(reader_tap_zones_tests)
