@@ -28,11 +28,6 @@ void drawDigit(const GfxRenderer& renderer, int digit, int x, int y, int w, int 
   if (segs & SevenSegment::SEG_G) renderer.fillRect(x, y + halfH - t / 2, w, t);
 }
 
-const char* monthAbbrev(uint8_t month) {
-  static const char* kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  return (month >= 1 && month <= 12) ? kMonths[month - 1] : "";
-}
-
 }  // namespace
 
 bool ClockFace::draw(const GfxRenderer& renderer, const bool fullRefresh) {
@@ -109,9 +104,13 @@ bool ClockFace::draw(const GfxRenderer& renderer, const bool fullRefresh) {
     textY += dh / 8;
   }
 
+  // ISO 8601 (YYYY-MM-DD), deliberately numeric: month names would be user-facing
+  // text, and every user-facing string has to come from tr(). No month-name string
+  // ids exist, and adding twelve would land on every translation file. A numeric
+  // date is locale-neutral and needs no translation at all.
   char dateBuf[32] = {};
-  snprintf(dateBuf, sizeof(dateBuf), "%u %s %u", static_cast<unsigned>(now.day), monthAbbrev(now.month),
-           static_cast<unsigned>(now.year));
+  snprintf(dateBuf, sizeof(dateBuf), "%04u-%02u-%02u", static_cast<unsigned>(now.year),
+           static_cast<unsigned>(now.month), static_cast<unsigned>(now.day));
   renderer.drawCenteredText(UI_12_FONT_ID, textY, dateBuf);
 
   char batteryBuf[16] = {};
