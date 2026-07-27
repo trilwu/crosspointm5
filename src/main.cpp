@@ -289,7 +289,18 @@ static void lightSleepUntilTouchWake() {
     // Repaint just the clock — no activity churn, and no "Going to sleep" popup.
     const bool fullRefresh = ++minutesSinceFullRefresh >= MINUTES_PER_FULL_REFRESH;
     if (fullRefresh) minutesSinceFullRefresh = 0;
-    if (!ClockFace::draw(renderer, fullRefresh)) {
+    // Take the render lock, like every other direct renderer use in this file and
+    // like the render task itself. The render task happens to be parked for the
+    // whole of this sleep, so nothing else touches the framebuffer today - but that
+    // is an unstated invariant, and a future hook that broke it would corrupt the
+    // buffer mid-refresh. Scoped so the lock is released before anything below that
+    // takes a lock of its own.
+    bool drawn = false;
+    {
+      RenderLock lock;
+      drawn = ClockFace::draw(renderer, fullRefresh);
+    }
+    if (!drawn) {
       // Nothing was drawn (e.g. a transient I2C failure reading the RTC). Stop
       // waking every minute to do nothing; the plain touch wait above keeps the
       // poll timer armed, so the device stays wakeable.
