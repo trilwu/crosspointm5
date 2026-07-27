@@ -241,7 +241,13 @@ static void lightSleepUntilTouchWake() {
       ClockMath::Date nowDate;
       uint8_t second = 0;
       if (halClock.getLocalDateTime(nowDate, second, SETTINGS.clockUtcOffsetQ)) {
-        timeoutMs = static_cast<uint32_t>(60 - (second % 60)) * 1000U;
+        // getLocalDateTime() already reports seconds as 0-59, so no modulo is
+        // needed and the result is 1..60 - never 0. That matters: a 0 timeout
+        // means "wait for touch only", which would freeze the clock until
+        // somebody touched the panel. The guard keeps that true if the RTC ever
+        // hands back a nonsense seconds value.
+        const uint32_t secondsToMinute = (second < 60) ? (60U - second) : 60U;
+        timeoutMs = secondsToMinute * 1000U;
       } else {
         // A never-synced RTC fails this read persistently, and ClockFace::draw()
         // would then draw nothing. Stop trying rather than repaint-spin forever;
