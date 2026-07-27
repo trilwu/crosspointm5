@@ -125,3 +125,33 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
 
   drawSlateScrollBar(renderer, rect, itemCount, pageStartIndex, pageItems);
 }
+
+void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const char* title,
+                            const char* subtitle) const {
+  if (!title) return;
+
+  const int sidePadding = SlateMetrics::values.contentSidePadding;
+  const int textX = rect.x + sidePadding;
+  const int maxWidth = rect.width - sidePadding * 2;
+  if (maxWidth <= 0) return;
+
+  const int titleLineHeight = renderer.getLineHeight(kTitleFontId);
+  const std::string truncatedTitle =
+      renderer.truncatedText(kTitleFontId, title, maxWidth, EpdFontFamily::BOLD);
+
+  if (!subtitle || *subtitle == '\0') {
+    renderer.drawText(kTitleFontId, textX, rect.y + (rect.height - titleLineHeight) / 2, truncatedTitle.c_str(), true,
+                      EpdFontFamily::BOLD);
+    return;
+  }
+
+  const int subtitleLineHeight = renderer.getLineHeight(kSubtitleFontId);
+  const int blockHeight = titleLineHeight + kSubtitleGap + subtitleLineHeight;
+  const int titleY = rect.y + (rect.height - blockHeight) / 2;
+  const std::string truncatedSubtitle =
+      renderer.truncatedText(kSubtitleFontId, subtitle, maxWidth, EpdFontFamily::REGULAR);
+
+  renderer.drawText(kTitleFontId, textX, titleY, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
+  renderer.drawText(kSubtitleFontId, textX, titleY + titleLineHeight + kSubtitleGap, truncatedSubtitle.c_str(), true,
+                    EpdFontFamily::REGULAR);
+}
