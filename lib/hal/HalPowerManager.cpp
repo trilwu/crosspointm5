@@ -136,6 +136,14 @@ HalPowerManager::WakeReason HalPowerManager::lightSleepUntilTouch(const uint32_t
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
   }
 
+  // Keep the flash/PSRAM rail up across the sleep. VDDSDIO powers down by default in
+  // light sleep; this board runs OPI PSRAM and the display driver keeps its canvas
+  // there, so letting the rail drop means waking to corrupted memory — which faults
+  // rather than merely glitching. The whole point of light sleep here is that RAM
+  // survives, so holding this domain is not an extra cost, it is the premise.
+  esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_ON);
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+
   const esp_err_t err = esp_light_sleep_start();
   const esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
 

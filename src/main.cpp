@@ -403,8 +403,22 @@ void enterDeepSleep(bool fromTimeout = false) {
   // driver would have to be re-initialised before it could be drawn to again — and
   // the per-minute clock repaint needs to drive it. Light sleep retains that state,
   // so leaving the panel initialised is both safe and required.
-  const bool clockSleep = SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::CLOCK &&
-                          BoardConfig::hasRtc() && !isQuickResumeSleep;
+  // Requires a clock we can actually READ, not merely an RTC that is wired up.
+  // hasRtc() only says an address is configured; an RTC that has never been set
+  // reports its oscillator stopped and every read fails, so the clock face cannot
+  // draw. Taking light sleep then would give the worst of both worlds: no clock on
+  // screen and none of the PMIC power-off's ~0uA. Probe once and fall through to the
+  // proven power-off path if the clock is not readable.
+  bool clockSleep = SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::CLOCK &&
+                    BoardConfig::hasRtc() && !isQuickResumeSleep;
+  if (clockSleep) {
+    ClockMath::Date probeDate;
+    uint8_t probeSecond = 0;
+    if (!halClock.getLocalDateTime(probeDate, probeSecond, SETTINGS.clockUtcOffsetQ)) {
+      LOG_INF("MAIN", "Clock sleep selected but the RTC is unreadable (never synced?); using power-off sleep");
+      clockSleep = false;
+    }
+  }
   if (clockSleep && BoardConfig::hasTouch() && !BoardConfig::hasNavButtons() && BoardConfig::ACTIVE.input.power < 0) {
     lightSleepUntilTouchWake();
     return;
