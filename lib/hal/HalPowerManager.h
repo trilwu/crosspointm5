@@ -45,12 +45,21 @@ class HalPowerManager {
   // Why lightSleepUntilTouch() returned.
   enum class WakeReason { Touch, Timer };
 
+  // Fallback wake period used when timeoutMs is 0 but no INT wake source could be
+  // armed. Sleeping with nothing armed would strand the device permanently.
+  static constexpr uint32_t NO_WAKE_SOURCE_FALLBACK_MS = 60000;
+
   // Light sleep (RAM retained, instant resume) until the touch controller asserts
   // its INT line, or until timeoutMs elapses (0 = wait for touch only).
   //
-  // Deep sleep is not usable on a touch-only board whose GT911 INT is GPIO48:
-  // only GPIO0-21 are RTC-capable on the ESP32-S3, so deep sleep could never wake
-  // on touch. Light sleep can wake on any GPIO.
+  // A 0 timeout is promoted to a NO_WAKE_SOURCE_FALLBACK_MS timer when no INT pin
+  // could be armed (no touch IRQ configured, or gpio_wakeup_enable() failed), so
+  // this never sleeps without a wake source.
+  //
+  // Only used on a board that must stay powered while "asleep" (the wall-clock
+  // sleep screen): deep sleep would be far cheaper, but a GT911 INT on GPIO48 is
+  // not RTC-capable — only GPIO0-21 are on the ESP32-S3 — so it could not wake on
+  // touch. Light sleep can wake on any GPIO.
   WakeReason lightSleepUntilTouch(uint32_t timeoutMs) const;
 
   // Get battery percentage (range 0-100)

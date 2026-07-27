@@ -114,14 +114,21 @@ HalPowerManager::WakeReason HalPowerManager::lightSleepUntilTouch(const uint32_t
 
   // The GT911 INT idles HIGH (InputManager leaves it INPUT_PULLUP after the wakeup
   // sequence) and is pulled LOW when a touch is reported, so wake on the low level.
+  bool gpioArmed = false;
   if (touchInt >= 0) {
     const auto pin = static_cast<gpio_num_t>(touchInt);
-    gpio_wakeup_enable(pin, GPIO_INTR_LOW_LEVEL);
-    esp_sleep_enable_gpio_wakeup();
+    gpioArmed = (gpio_wakeup_enable(pin, GPIO_INTR_LOW_LEVEL) == ESP_OK) && (esp_sleep_enable_gpio_wakeup() == ESP_OK);
   }
 
-  if (timeoutMs > 0) {
-    esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(timeoutMs) * 1000ULL);
+  // Never sleep with nothing armed: that would strand the device with no way back.
+  uint32_t effectiveTimeoutMs = timeoutMs;
+  if (!gpioArmed && effectiveTimeoutMs == 0) {
+    LOG_ERR("PWR", "No touch wake source armed; forcing a fallback timer");
+    effectiveTimeoutMs = NO_WAKE_SOURCE_FALLBACK_MS;
+  }
+
+  if (effectiveTimeoutMs > 0) {
+    esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(effectiveTimeoutMs) * 1000ULL);
   } else {
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
   }
@@ -133,6 +140,7 @@ HalPowerManager::WakeReason HalPowerManager::lightSleepUntilTouch(const uint32_t
   if (touchInt >= 0) {
     gpio_wakeup_disable(static_cast<gpio_num_t>(touchInt));
   }
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
 
   if (err != ESP_OK) {
