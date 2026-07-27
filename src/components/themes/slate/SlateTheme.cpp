@@ -180,3 +180,44 @@ void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const 
                         SlateMetrics::values.batteryWidth, SlateMetrics::values.batteryHeight},
                    showBatteryPercentage);
 }
+
+void SlateTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const int buttonCount,
+                                const int selectedIndex, const std::function<std::string(int index)>& buttonLabel,
+                                const std::function<UIIcon(int index)>& rowIcon) const {
+  (void)rowIcon;
+
+  // HomeActivity::onInput hit-tests this menu itself (it doesn't call back into the
+  // theme), so the drawn geometry here must match its math exactly:
+  //   menuTop = homeTopPadding + homeCoverTileHeight + homeMenuTopOffset
+  //   rowTouch(top = menuTop, rowStep = menuRowHeight + menuSpacing, rowHeight = menuRowHeight)
+  // rowTouch computes row = (y - menuTop) / rowStep, valid when (y - menuTop) % rowStep < rowHeight.
+  // HomeActivity passes rect.y == menuTop (same expression), so row i's tappable band is
+  // [rect.y + i*rowStep, rect.y + i*rowStep + menuRowHeight). Rows must therefore start
+  // at rect.y with NO extra offset -- adding verticalSpacing here (as BaseTheme's
+  // unrelated draw does with its own metrics) would shift every drawn row down and off
+  // the tap band it's supposed to occupy.
+  const int sidePadding = SlateMetrics::values.contentSidePadding;
+  const int rowX = rect.x + sidePadding;
+  const int rowWidth = rect.width - sidePadding * 2;
+  const int rowHeight = SlateMetrics::values.menuRowHeight;
+  const int rowStep = rowHeight + SlateMetrics::values.menuSpacing;
+  const int lineHeight = renderer.getLineHeight(kTitleFontId);
+
+  for (int i = 0; i < buttonCount; ++i) {
+    const int rowY = rect.y + i * rowStep;
+    const bool isSelected = selectedIndex == i;
+
+    if (isSelected) {
+      renderer.fillRoundedRect(rowX, rowY, rowWidth, rowHeight, kRowRadius, Color::Black);
+    }
+    // Unselected rows are left unfilled, matching drawList's visual language.
+
+    const std::string label = buttonLabel(i);
+    const int maxLabelWidth = std::max(0, rowWidth - kRowInsetX * 2);
+    const std::string truncatedLabel =
+        renderer.truncatedText(kTitleFontId, label.c_str(), maxLabelWidth, EpdFontFamily::BOLD);
+    const int textY = rowY + (rowHeight - lineHeight) / 2;
+    renderer.drawText(kTitleFontId, rowX + kRowInsetX, textY, truncatedLabel.c_str(), !isSelected,
+                      EpdFontFamily::BOLD);
+  }
+}

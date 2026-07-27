@@ -86,5 +86,8 @@ class SlateTheme : public BaseTheme {
                 const std::function<bool(int index)>& rowDimmed = nullptr) const override;
   void drawHeader(const GfxRenderer& renderer, Rect rect, const char* title,
                   const char* subtitle = nullptr) const override;
+  void drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
+                      const std::function<std::string(int index)>& buttonLabel,
+                      const std::function<UIIcon(int index)>& rowIcon) const override;
   bool showsFileIcons() const override { return true; }
 };
