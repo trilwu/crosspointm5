@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <string>
 
+#include "CrossPointSettings.h"
 #include "fontIds.h"
 
 namespace {
@@ -132,7 +133,21 @@ void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const 
 
   const int sidePadding = SlateMetrics::values.contentSidePadding;
   const int textX = rect.x + sidePadding;
-  const int maxWidth = rect.width - sidePadding * 2;
+
+  const bool showBatteryPercentage =
+      SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
+  const int batteryIconX = rect.x + rect.width - sidePadding - SlateMetrics::values.batteryWidth;
+
+  // Reserve space for the widest possible percentage text ("100%") so the title truncation
+  // width accounts for it, avoiding overlap when the digit count changes (e.g. 100% -> 99%).
+  int batteryGroupLeftX = batteryIconX;
+  if (showBatteryPercentage) {
+    const int maxPercentTextWidth = renderer.getTextWidth(SMALL_FONT_ID, "100%");
+    batteryGroupLeftX -= maxPercentTextWidth + batteryPercentSpacing;
+  }
+
+  constexpr int kBatteryTitleGap = 20;
+  const int maxWidth = std::max(0, batteryGroupLeftX - kBatteryTitleGap - textX);
   if (maxWidth <= 0) return;
 
   const int titleLineHeight = renderer.getLineHeight(kTitleFontId);
@@ -142,16 +157,20 @@ void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const 
   if (!subtitle || *subtitle == '\0') {
     renderer.drawText(kTitleFontId, textX, rect.y + (rect.height - titleLineHeight) / 2, truncatedTitle.c_str(), true,
                       EpdFontFamily::BOLD);
-    return;
+  } else {
+    const int subtitleLineHeight = renderer.getLineHeight(kSubtitleFontId);
+    const int blockHeight = titleLineHeight + kSubtitleGap + subtitleLineHeight;
+    const int titleY = rect.y + (rect.height - blockHeight) / 2;
+    const std::string truncatedSubtitle =
+        renderer.truncatedText(kSubtitleFontId, subtitle, maxWidth, EpdFontFamily::REGULAR);
+
+    renderer.drawText(kTitleFontId, textX, titleY, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
+    renderer.drawText(kSubtitleFontId, textX, titleY + titleLineHeight + kSubtitleGap, truncatedSubtitle.c_str(),
+                      true, EpdFontFamily::REGULAR);
   }
 
-  const int subtitleLineHeight = renderer.getLineHeight(kSubtitleFontId);
-  const int blockHeight = titleLineHeight + kSubtitleGap + subtitleLineHeight;
-  const int titleY = rect.y + (rect.height - blockHeight) / 2;
-  const std::string truncatedSubtitle =
-      renderer.truncatedText(kSubtitleFontId, subtitle, maxWidth, EpdFontFamily::REGULAR);
-
-  renderer.drawText(kTitleFontId, textX, titleY, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
-  renderer.drawText(kSubtitleFontId, textX, titleY + titleLineHeight + kSubtitleGap, truncatedSubtitle.c_str(), true,
-                    EpdFontFamily::REGULAR);
+  drawBatteryRight(renderer,
+                   Rect{batteryIconX, rect.y + (rect.height - SlateMetrics::values.batteryHeight) / 2,
+                        SlateMetrics::values.batteryWidth, SlateMetrics::values.batteryHeight},
+                   showBatteryPercentage);
 }
