@@ -95,6 +95,8 @@ Upon turning the device on for the first time, you will be placed on the **[Home
 
 The Home screen is the main entry point to the firmware. From here you can navigate to **[Reading Mode](#4-reading-mode)** with the most recently read book, the **[Browse Files](#33-browse-files-screen)** screen, the **[Recent Books](#34-recent-books-screen)** screen, the **[File Transfer](#35-file-transfer-screen)** screen, or **[Settings](#36-settings)**.
 
+On devices with no physical power button, the Home screen also offers a **Sleep** row that puts the device to sleep immediately. Devices with a power button do not show it, since holding that button already sleeps the device.
+
 ### 3.2 Reading Mode
 
 See [Reading Mode](#4-reading-mode) below for more information.
@@ -186,6 +188,7 @@ The Settings screen allows you to configure the device's behavior. There are a f
   - "None" - A blank screen
   - "Cover + Custom" - The book cover image while actively reading, falls back to "Custom" behavior otherwise
   - "Quick resume" - The text of the last page read will be displayed on the sleep screen and a moon icon is shown on the edge of the screen. Waking up the device will return to the same page of the opened book. This is useful for quickly resuming reading without waiting for the device to fully wake up and load the book.
+  - "Clock" - A large wall clock with the date and battery level *(only offered on devices with a real-time clock)*
 
 - **Sleep Screen Cover Mode**: How to display the book cover when "Cover" sleep screen is selected:
   
@@ -502,6 +505,13 @@ The **Sleep Screen** setting controls what is displayed when the device goes to 
 | **Cover**          | The cover of the currently open book. Falls back to **Dark** if no book is open.                                             |
 | **Cover + Custom** | The cover of the currently open book, shown only while actively reading. Falls back to **Custom** behavior when not reading. |
 | **None**           | A blank screen.                                                                                                              |
+| **Clock**          | A large wall clock (HH:MM) with the date and battery level. Only offered on devices with a real-time clock.                  |
+
+#### Clock
+
+The **Clock** sleep screen shows the current time in large seven-segment digits, with the date underneath in `YYYY-MM-DD` form and the battery percentage below that. It uses the same 12/24-hour format and UTC offset as the status-bar clock.
+
+On the M5Paper S3 the clock keeps ticking while the device sleeps: the time is redrawn on every minute boundary. On every other device, sleep powers the board down, so the clock face is frozen at the moment you put the device to sleep and does not update until you wake it. That is expected, not a fault.
 
 #### Cover settings
 
@@ -617,6 +627,7 @@ Available options include:
 - **Go Home** – Close the book and return to the Home screen.
 - **Sync Progress** – Push or pull reading progress with a KOReader sync server (see [KOReader Sync Quick Setup](#367-koreader-sync-quick-setup)).
 - **Delete Book Cache** – Clear the cached layout data for the current book, forcing a re-index on next open.
+- **Sleep** – Put the device to sleep straight away without leaving the book. Waking returns you to the same page. On devices with no power button this is the only way to sleep on demand while reading.
 
 Press **Back** at any time to close the menu and return to your current page.
 
