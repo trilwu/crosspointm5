@@ -15,6 +15,10 @@ constexpr int kRowGap = 6;
 constexpr int kTitleFontId = UI_12_FONT_ID;
 constexpr int kSubtitleFontId = SMALL_FONT_ID;
 constexpr int kSubtitleGap = 4;
+// BaseTheme::drawBatteryRight shifts the battery icon down by this many pixels
+// from the y it's given (while drawing the percentage text at the unshifted
+// y). Subtract it here so the icon itself ends up centered in the header.
+constexpr int kBatteryIconInternalOffsetY = 6;
 
 void drawSlateScrollBar(const GfxRenderer& renderer, const Rect rect, const int itemCount, const int pageStartIndex,
                         const int pageItems) {
@@ -170,7 +174,9 @@ void SlateTheme::drawHeader(const GfxRenderer& renderer, const Rect rect, const 
   }
 
   drawBatteryRight(renderer,
-                   Rect{batteryIconX, rect.y + (rect.height - SlateMetrics::values.batteryHeight) / 2,
+                   Rect{batteryIconX,
+                        rect.y + (rect.height - SlateMetrics::values.batteryHeight) / 2 -
+                            kBatteryIconInternalOffsetY,
                         SlateMetrics::values.batteryWidth, SlateMetrics::values.batteryHeight},
                    showBatteryPercentage);
 }
