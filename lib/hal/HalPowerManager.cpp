@@ -112,8 +112,11 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
 HalPowerManager::WakeReason HalPowerManager::lightSleepUntilTouch(const uint32_t timeoutMs) const {
   const int8_t touchInt = BoardConfig::ACTIVE.touch.irq;
 
-  // The GT911 INT idles HIGH (InputManager leaves it INPUT_PULLUP after the wakeup
-  // sequence) and is pulled LOW when a touch is reported, so wake on the low level.
+  // The GT911 INT idles HIGH and is pulled LOW when a touch is reported, so wake on
+  // the low level. Confirmed against M5's own driver for this controller (M5GFX's
+  // lgfx Touch_GT911): its wakeup() leaves the pin as input_pullup, and getTouchRaw()
+  // reads a touch frame only when `!gpio_in(pin_int)` — i.e. LOW means data pending.
+  // InputManager leaves the pin in the same state after its own wake sequence.
   bool gpioArmed = false;
   if (touchInt >= 0) {
     const auto pin = static_cast<gpio_num_t>(touchInt);
