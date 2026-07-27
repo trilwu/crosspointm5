@@ -1,0 +1,3 @@
+add_executable(slate_metrics_tests test_slate_metrics.cpp)
+target_link_libraries(slate_metrics_tests PRIVATE GTest::gtest_main crosspoint_test_common)
+gtest_discover_tests(slate_metrics_tests)

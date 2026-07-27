@@ -14,6 +14,7 @@
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
 #include "components/themes/roundedraff/RoundedRaffTheme.h"
+#include "components/themes/slate/SlateTheme.h"
 
 UITheme UITheme::instance;
 
@@ -48,6 +49,11 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Lyra 3 Covers theme");
       currentTheme = std::make_unique<Lyra3CoversTheme>();
       currentMetrics = &Lyra3CoversMetrics::values;
+      break;
+    case CrossPointSettings::UI_THEME::SLATE:
+      LOG_DBG("UI", "Using Slate theme");
+      currentTheme = std::make_unique<SlateTheme>();
+      currentMetrics = &SlateMetrics::values;
       break;
   }
   metricsValid = false;

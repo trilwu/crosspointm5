@@ -28,6 +28,7 @@ add_library(crosspoint_test_common INTERFACE)
 target_include_directories(crosspoint_test_common INTERFACE
   ${REPO_ROOT}
   ${REPO_ROOT}/lib
+  ${REPO_ROOT}/src
 )
 # GCC/Clang warning flags are not valid for MSVC, which rejects them as a hard
 # error (D8021), so the whole suite fails to build on a Windows/MSVC host. Use the
@@ -56,3 +57,4 @@ add_subdirectory(combining_marks)
 add_subdirectory(clock_math)
 add_subdirectory(seven_segment)
 add_subdirectory(reader_tap_zones)
+add_subdirectory(slate_metrics)
