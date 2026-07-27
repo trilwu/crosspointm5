@@ -21,7 +21,7 @@
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 4;  // File Browser, Recents, File transfer, Settings
+  int count = 5;  // File Browser, Recents, File transfer, Settings, Sleep
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
@@ -192,6 +192,10 @@ void HomeActivity::loop() {
       case HomeMenuItem::SETTINGS_MENU:
         onSettingsOpen();
         break;
+      case HomeMenuItem::SLEEP:
+        // The main loop polls this and sleeps at a safe point.
+        APP_STATE.sleepRequested = true;
+        break;
       default:
         break;
     }
@@ -301,8 +305,13 @@ void HomeActivity::render(RenderLock&&) {
 
   // Build menu items dynamically
   std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_FILE_TRANSFER),
-                                        tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Settings};
+                                        tr(STR_SETTINGS_TITLE), tr(STR_SLEEP)};
+  // UIIcon has no sleep glyph, so Sleep uses None and renders without an icon.
+  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Settings, None};
+  // Final size is at most the 5 fixed rows plus OPDS and Continue Reading, so
+  // reserving here keeps the inserts below from reallocating.
+  menuItems.reserve(7);
+  menuIcons.reserve(7);
 
   if (hasOpdsServers) {
     menuItems.insert(menuItems.begin() + 2, tr(STR_OPDS_BROWSER));
