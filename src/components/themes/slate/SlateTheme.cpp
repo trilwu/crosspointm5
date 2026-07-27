@@ -268,3 +268,64 @@ void SlateTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const in
                       EpdFontFamily::BOLD);
   }
 }
+
+void SlateTheme::drawSubHeader(const GfxRenderer& renderer, const Rect rect, const char* label,
+                               const char* rightLabel) const {
+  constexpr int kMaxRightLabelWidth = 200;
+  const int sidePadding = SlateMetrics::values.contentSidePadding;
+  const int labelLineHeight = renderer.getLineHeight(kTitleFontId);
+  const int labelY = rect.y + std::max(0, (rect.height - labelLineHeight) / 2);
+
+  int rightSpace = sidePadding;
+  if (rightLabel) {
+    const std::string truncatedRightLabel =
+        renderer.truncatedText(kSubtitleFontId, rightLabel, kMaxRightLabelWidth, EpdFontFamily::REGULAR);
+    const int rightLabelWidth = renderer.getTextWidth(kSubtitleFontId, truncatedRightLabel.c_str());
+    const int rightLineHeight = renderer.getLineHeight(kSubtitleFontId);
+    const int rightY = rect.y + std::max(0, (rect.height - rightLineHeight) / 2);
+    renderer.drawText(kSubtitleFontId, rect.x + rect.width - sidePadding - rightLabelWidth, rightY,
+                      truncatedRightLabel.c_str());
+    rightSpace += rightLabelWidth + kRowGap;
+  }
+
+  const std::string truncatedLabel = renderer.truncatedText(
+      kTitleFontId, label, std::max(0, rect.width - sidePadding - rightSpace), EpdFontFamily::REGULAR);
+  renderer.drawText(kTitleFontId, rect.x + sidePadding, labelY, truncatedLabel.c_str(), true, EpdFontFamily::REGULAR);
+}
+
+void SlateTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const std::vector<TabInfo>& tabs,
+                            const bool selected) const {
+  constexpr int underlineHeight = 2;  // Height of selection underline
+  constexpr int underlineGap = 4;     // Gap between text and underline
+
+  const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+
+  // SlateTheme does not override tabIndexFromPoint, so taps are still hit-tested by
+  // BaseTheme::tabIndexFromPoint using BaseMetrics::values.contentSidePadding/tabSpacing.
+  // Mirror those exact x constants here (instead of SlateMetrics::values) so the drawn
+  // tab boundaries land exactly where the inherited hit test expects them. Only the
+  // vertical position changes, to center the label block within the taller rect.height
+  // that Slate's tabBarHeight metric produces -- that doesn't affect tabIndexFromPoint,
+  // which only checks y against rect.y/rect.height, not the exact glyph baseline.
+  int currentX = rect.x + BaseMetrics::values.contentSidePadding;
+  const int contentHeight = lineHeight + underlineGap + underlineHeight;
+  const int topY = rect.y + std::max(0, (rect.height - contentHeight) / 2);
+
+  for (const auto& tab : tabs) {
+    const int textWidth =
+        renderer.getTextWidth(UI_12_FONT_ID, tab.label, tab.selected ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+
+    if (tab.selected) {
+      if (selected) {
+        renderer.fillRect(currentX - 3, topY, textWidth + 6, lineHeight + underlineGap);
+      } else {
+        renderer.fillRect(currentX, topY + lineHeight + underlineGap, textWidth, underlineHeight);
+      }
+    }
+
+    renderer.drawText(UI_12_FONT_ID, currentX, topY, tab.label, !(tab.selected && selected),
+                      tab.selected ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+
+    currentX += textWidth + BaseMetrics::values.tabSpacing;
+  }
+}
