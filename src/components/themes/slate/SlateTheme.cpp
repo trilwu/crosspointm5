@@ -647,7 +647,14 @@ void SlateTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
   const int pillHeight = titleLineHeight + kHeroPillVPadding * 2;
   const int pillX = rect.x + (rect.width - pillWidth) / 2;
 
-  renderer.fillRoundedRect(pillX, y, pillWidth, pillHeight, kRowRadius, Color::LightGray);
+  // When the tile is selected, the whole text band behind this pill is already
+  // washed LightGray (see the selection wash above), so a LightGray pill fill
+  // would vanish into it -- gray-on-gray, shape gone, only the label visible.
+  // Use White for the pill in that state so it still reads as a distinct chip
+  // against the wash; unselected, White is the page background, so LightGray is
+  // what makes the pill visible there instead. The label stays black either way.
+  const Color pillColor = isSelected ? Color::White : Color::LightGray;
+  renderer.fillRoundedRect(pillX, y, pillWidth, pillHeight, kRowRadius, pillColor);
   renderer.drawText(kTitleFontId, pillX + kRowInsetX, y + kHeroPillVPadding, truncatedCta.c_str(), true,
                     EpdFontFamily::BOLD);
 }
