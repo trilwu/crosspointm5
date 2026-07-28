@@ -26,7 +26,7 @@ constexpr ThemeMetrics values = {.batteryWidth = 18,
                                  .scrollBarWidth = 5,
                                  .scrollBarRightOffset = 6,
                                  .homeTopPadding = 40,
-                                 .homeCoverHeight = 400,
+                                 .homeCoverHeight = 200,
                                  .homeCoverTileHeight = 400,
                                  .homeRecentBooksCount = 1,
                                  .homeContinueReadingInMenu = true,
@@ -98,5 +98,8 @@ class SlateTheme : public BaseTheme {
                        int selectedIndex) const override;
   void drawTextField(const GfxRenderer& renderer, Rect rect, int textWidth, bool cursorMode = false,
                      int contentStartX = 0, int contentWidth = 0) const override;
+  void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
+                           int selectorIndex, bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
+                           std::function<bool()> storeCoverBuffer) const override;
   bool showsFileIcons() const override { return true; }
 };

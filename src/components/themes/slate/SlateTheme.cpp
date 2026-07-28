@@ -1,11 +1,15 @@
 #include "SlateTheme.h"
 
 #include <GfxRenderer.h>
+#include <HalStorage.h>
+#include <I18n.h>
 
 #include <algorithm>
 #include <string>
 
 #include "CrossPointSettings.h"
+#include "RecentBooksStore.h"
+#include "components/UITheme.h"
 #include "components/icons/book24.h"
 #include "components/icons/file24.h"
 #include "components/icons/folder24.h"
@@ -26,6 +30,9 @@ constexpr int kSubtitleGap = 8;
 constexpr int kBatteryIconInternalOffsetY = 6;
 constexpr int kListIconSize = 24;
 constexpr int kIconTextGap = 10;
+// Home hero (drawRecentBookCover) layout constants.
+constexpr int kHeroGap = 14;          // cover -> title, and author -> call-to-action pill
+constexpr int kHeroPillVPadding = 12;  // call-to-action pill top/bottom padding
 
 // FileBrowserActivity is the only caller that passes rowIcon today, and it only
 // ever hands back Folder/Book/Text/Image/File — the 24px set covers all of those.
@@ -462,4 +469,161 @@ void SlateTheme::drawTextField(const GfxRenderer& renderer, const Rect rect, con
   // A rounded bar replaces BaseTheme's hard-edged drawLine, so the underline follows
   // the "generous corners" rule the rest of Slate uses instead of a sharp rule.
   renderer.fillRoundedRect(lineStart, lineY, lineW, thickness, radius, Color::Black);
+}
+
+// The home screen hero. `rect` is the whole cover tile (full width,
+// SlateMetrics::values.homeCoverTileHeight tall) that HomeActivity positions the menu
+// directly beneath, so everything drawn here must stay inside rect.height.
+//
+// Cover-buffer protocol (preserved exactly, see BaseTheme::drawRecentBookCover):
+//   coverRendered      in/out -- true once the cover bitmap for the current book has
+//                                been decoded from SD and its pixels safely captured.
+//                                While true, skip the SD decode and trust the
+//                                framebuffer/HomeActivity's snapshot instead.
+//   coverBufferStored   out   -- true iff storeCoverBuffer() this call actually copied
+//                                the cover tile into HomeActivity's own small buffer
+//                                (the ~16 KB region snapshot, instead of a 48 KB full
+//                                framebuffer clone). coverRendered is set from this so
+//                                a failed snapshot forces a real decode next time.
+//   bufferRestored      in    -- true when HomeActivity has already blitted a
+//                                previously-stored snapshot back into the framebuffer
+//                                before calling this function this frame. The cover
+//                                bitmap's own rect must not be touched in that case.
+//   storeCoverBuffer    fn    -- call once, immediately after a fresh SD decode, to
+//                                ask HomeActivity to snapshot the cover region.
+//
+// To honour "bufferRestored means don't touch the bitmap rect" while still drawing a
+// LightGray selection wash "behind the whole tile" (Task 1's convention), the wash is
+// confined to the margins around the cover art and the text band below it -- it never
+// overlaps the bitmap's own rect, so it (and the title/author/pill it sits behind) can
+// be safely repainted every call, whether or not this frame did a fresh SD decode.
+void SlateTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
+                                     const std::vector<RecentBook>& recentBooks, const int selectorIndex,
+                                     bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
+                                     std::function<bool()> storeCoverBuffer) const {
+  const auto& metrics = SlateMetrics::values;
+  const int sidePadding = metrics.contentSidePadding;
+  const int contentX = rect.x + sidePadding;
+  const int contentWidth = std::max(0, rect.width - sidePadding * 2);
+
+  const bool hasContinueReading = !recentBooks.empty();
+  const bool isSelected = hasContinueReading && selectorIndex == 0;
+
+  const int coverHeight = metrics.homeCoverHeight;
+  const int coverY = rect.y;
+
+  // Cover footprint. With an image, width follows its aspect ratio (capped so the
+  // selection-wash margins below always have room); without one, the placeholder
+  // spans the full content width, matching the "same footprint" placeholder rule.
+  int coverWidth = contentWidth;
+  bool hasCoverImage = false;
+  if (hasContinueReading && !recentBooks[0].coverBmpPath.empty()) {
+    const std::string coverBmpPath = UITheme::getCoverThumbPath(recentBooks[0].coverBmpPath, coverHeight);
+    HalFile probeFile;
+    if (Storage.openFileForRead("HOME", coverBmpPath, probeFile)) {
+      Bitmap probeBitmap(probeFile);
+      if (probeBitmap.parseHeaders() == BmpReaderError::Ok) {
+        hasCoverImage = true;
+        const int imgWidth = probeBitmap.getWidth();
+        const int imgHeight = probeBitmap.getHeight();
+        if (imgWidth > 0 && imgHeight > 0) {
+          const float aspectRatio = static_cast<float>(imgWidth) / static_cast<float>(imgHeight);
+          const int maxCoverWidth = std::max(1, contentWidth * 3 / 4);
+          coverWidth = std::clamp(static_cast<int>(coverHeight * aspectRatio), 1, maxCoverWidth);
+        }
+      }
+      probeFile.close();
+    }
+  }
+  const int coverX = rect.x + (rect.width - coverWidth) / 2;
+
+  // Selection wash -- LightGray rounded fill, never an inverted block -- confined to
+  // the margins beside the cover and the text band below it (see function comment).
+  if (isSelected) {
+    const int leftMarginW = coverX - contentX;
+    if (leftMarginW > 0) {
+      renderer.fillRoundedRect(contentX, coverY, leftMarginW, coverHeight, kRowRadius, true, false, true, false,
+                               Color::LightGray);
+    }
+    const int rightMarginX = coverX + coverWidth;
+    const int rightMarginW = contentX + contentWidth - rightMarginX;
+    if (rightMarginW > 0) {
+      renderer.fillRoundedRect(rightMarginX, coverY, rightMarginW, coverHeight, kRowRadius, false, true, false, true,
+                               Color::LightGray);
+    }
+    const int bandY = coverY + coverHeight;
+    const int bandH = std::max(0, rect.y + rect.height - bandY);
+    if (bandH > 0) {
+      renderer.fillRoundedRect(contentX, bandY, contentWidth, bandH, kRowRadius, false, false, true, true,
+                               Color::LightGray);
+    }
+  }
+
+  // Cover art itself: the only part of this function gated by the snapshot protocol,
+  // since it's the only part that costs an SD read.
+  if (hasCoverImage && !coverRendered) {
+    const std::string coverBmpPath = UITheme::getCoverThumbPath(recentBooks[0].coverBmpPath, coverHeight);
+    HalFile file;
+    if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
+      Bitmap bitmap(file);
+      if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+        renderer.drawBitmap(bitmap, coverX, coverY, coverWidth, coverHeight);
+        renderer.maskRoundedRectOutsideCorners(coverX, coverY, coverWidth, coverHeight, kRowRadius,
+                                               isSelected ? Color::LightGray : Color::White);
+        coverBufferStored = storeCoverBuffer();
+        coverRendered = coverBufferStored;  // Only consider it rendered if the snapshot actually landed.
+      }
+      file.close();
+    }
+  } else if (!hasCoverImage && !bufferRestored && !coverRendered) {
+    // No cover: a filled LightGray rounded placeholder, never an outlined box. Cheap
+    // (no SD access), so -- matching BaseTheme's equivalent branch -- it's fine to
+    // gate it the same way rather than force it every frame.
+    renderer.fillRoundedRect(coverX, coverY, coverWidth, coverHeight, kRowRadius, Color::LightGray);
+  }
+
+  if (!hasContinueReading) {
+    const int titleLineHeight = renderer.getLineHeight(kTitleFontId);
+    const int subtitleLineHeight = renderer.getLineHeight(kSubtitleFontId);
+    const int y = coverY + (coverHeight - titleLineHeight - subtitleLineHeight) / 2;
+    renderer.drawCenteredText(kTitleFontId, y, tr(STR_NO_OPEN_BOOK), true, EpdFontFamily::BOLD);
+    renderer.drawCenteredText(kSubtitleFontId, y + titleLineHeight, tr(STR_START_READING));
+    return;
+  }
+
+  // Title, author, and call-to-action pill: redrawn fresh every call (cheap, no SD
+  // access), which is what keeps them safe to sit inside the "always repainted"
+  // selection-wash band above regardless of coverRendered/bufferRestored.
+  const int textMaxWidth = std::max(0, rect.width - sidePadding * 2);
+  const int titleLineHeight = renderer.getLineHeight(kTitleFontId);
+  const int subtitleLineHeight = renderer.getLineHeight(kSubtitleFontId);
+
+  int y = coverY + coverHeight + kHeroGap;
+
+  const std::string title =
+      renderer.truncatedText(kTitleFontId, recentBooks[0].title.c_str(), textMaxWidth, EpdFontFamily::BOLD);
+  renderer.drawCenteredText(kTitleFontId, y, title.c_str(), true, EpdFontFamily::BOLD);
+  y += titleLineHeight;
+
+  if (!recentBooks[0].author.empty()) {
+    y += kSubtitleGap;
+    const std::string author =
+        renderer.truncatedText(kSubtitleFontId, recentBooks[0].author.c_str(), textMaxWidth, EpdFontFamily::REGULAR);
+    renderer.drawCenteredText(kSubtitleFontId, y, author.c_str());
+    y += subtitleLineHeight;
+  }
+
+  y += kHeroGap;
+
+  const char* ctaText = tr(STR_CONTINUE_READING);
+  const int maxPillTextWidth = std::max(0, contentWidth - kRowInsetX * 2);
+  const std::string truncatedCta = renderer.truncatedText(kTitleFontId, ctaText, maxPillTextWidth, EpdFontFamily::BOLD);
+  const int ctaTextWidth = renderer.getTextWidth(kTitleFontId, truncatedCta.c_str(), EpdFontFamily::BOLD);
+  const int pillWidth = ctaTextWidth + kRowInsetX * 2;
+  const int pillHeight = titleLineHeight + kHeroPillVPadding * 2;
+  const int pillX = rect.x + (rect.width - pillWidth) / 2;
+
+  renderer.fillRoundedRect(pillX, y, pillWidth, pillHeight, kRowRadius, Color::LightGray);
+  renderer.drawText(kTitleFontId, pillX + kRowInsetX, y + kHeroPillVPadding, truncatedCta.c_str(), true,
+                    EpdFontFamily::BOLD);
 }
