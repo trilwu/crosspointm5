@@ -33,6 +33,54 @@ constexpr int kIconTextGap = 10;
 // Home hero (drawRecentBookCover) layout constants.
 constexpr int kHeroGap = 14;          // cover -> title, and author -> call-to-action pill
 constexpr int kHeroPillVPadding = 12;  // call-to-action pill top/bottom padding
+constexpr int kNeighborHeightPercent = 70;  // neighbour covers render at ~70% of the hero's height
+constexpr int kHeroNeighborGap = 12;        // hero edge -> neighbour cover gap
+
+// Probes a cover thumbnail's aspect ratio without decoding pixel data (a cheap header
+// parse, not a draw) -- used every render to size the hero/neighbour footprints and the
+// wash margins around them, regardless of whether this frame does a fresh SD decode.
+bool probeCoverAspect(const std::string& coverBmpPath, float& aspectRatio) {
+  if (coverBmpPath.empty()) return false;
+  HalFile probeFile;
+  if (!Storage.openFileForRead("HOME", coverBmpPath, probeFile)) return false;
+  Bitmap probeBitmap(probeFile);
+  bool ok = false;
+  if (probeBitmap.parseHeaders() == BmpReaderError::Ok) {
+    const int w = probeBitmap.getWidth();
+    const int h = probeBitmap.getHeight();
+    if (w > 0 && h > 0) {
+      aspectRatio = static_cast<float>(w) / static_cast<float>(h);
+      ok = true;
+    }
+  }
+  probeFile.close();
+  return ok;
+}
+
+// Decodes and draws one cover bitmap into an (x, y, width, height) footprint smaller than
+// or equal to the source thumbnail; returns true iff a bitmap was actually decoded and
+// drawn (an SD read happened), which is what the caller uses to decide whether the
+// snapshot in storeCoverBuffer() is worth taking. `coverBmpPath` must already have its
+// [HEIGHT] placeholder resolved via UITheme::getCoverThumbPath(path, metrics.homeCoverHeight)
+// -- the same height HomeActivity generated the thumbnail at -- even when width/height here
+// are a neighbour's smaller on-screen footprint: GfxRenderer::drawBitmap only ever
+// downscales to fit (see its fitScale clamp to <= 1.0), so asking for a smaller box just
+// scales the same file at draw time instead of resolving a second generated size. Streams
+// the bitmap row by row (two small row buffers, freed before returning), so this never
+// holds a whole decoded image, let alone three, in memory at once.
+bool decodeAndDrawCover(GfxRenderer& renderer, const std::string& coverBmpPath, int x, int y, int width,
+                        int height) {
+  HalFile file;
+  if (!Storage.openFileForRead("HOME", coverBmpPath, file)) return false;
+  Bitmap bitmap(file);
+  bool drawn = false;
+  if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+    renderer.drawBitmap(bitmap, x, y, width, height);
+    drawn = true;
+  }
+  file.close();
+  return drawn;
+}
 
 // FileBrowserActivity is the only caller that passes rowIcon today, and it only
 // ever hands back Folder/Book/Text/Image/File — the 24px set covers all of those.
@@ -481,9 +529,18 @@ void SlateTheme::drawTextField(const GfxRenderer& renderer, const Rect rect, con
   renderer.fillRoundedRect(lineStart, lineY, lineW, thickness, radius, Color::Black);
 }
 
-// The home screen hero. `rect` is the whole cover tile (full width,
+// The home screen hero carousel. `rect` is the whole cover tile (full width,
 // SlateMetrics::values.homeCoverTileHeight tall) that HomeActivity positions the menu
 // directly beneath, so everything drawn here must stay inside rect.height.
+//
+// Up to three covers: recentBooks[0] centred at full size (the "selected"/Continue
+// Reading book), recentBooks[1] flanking it on the left and recentBooks[2] on the right,
+// both at ~kNeighborHeightPercent of the hero's height and vertically centred against it.
+// Neighbours sit entirely within the horizontal wash margins beside the hero (computed
+// from the *hero's* centred coverX/coverWidth, which never changes with neighbour
+// presence), so the tile stays centred and leaves no reserved gap when a neighbour is
+// absent -- nothing is drawn for a missing slot, and the margin there is plain wash.
+// Only recentBooks[0]'s title/author/pill are ever drawn, unchanged from v2.
 //
 // Cover-buffer protocol (preserved exactly, see BaseTheme::drawRecentBookCover):
 //   coverRendered      in/out -- true once the cover bitmap for the current book has
@@ -532,39 +589,75 @@ void SlateTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
 
   const int coverHeight = metrics.homeCoverHeight;
   const int coverY = rect.y;
+  const int neighborHeight = coverHeight * kNeighborHeightPercent / 100;
+  const int neighborY = coverY + (coverHeight - neighborHeight) / 2;
 
-  // Cover footprint. With an image, width follows its aspect ratio (capped so the
-  // selection-wash margins below always have room); without one, the placeholder
-  // spans the full content width, matching the "same footprint" placeholder rule.
+  // Hero footprint (recentBooks[0]). With an image, width follows its aspect ratio
+  // (capped so the selection-wash margins below always have room); without one, the
+  // placeholder spans the full content width, matching the "same footprint" placeholder
+  // rule. Computed every call (not gated by coverRendered) since the wash margins and
+  // corner masks below need the current footprint whether or not this frame decodes.
   int coverWidth = contentWidth;
   bool hasCoverImage = false;
   if (hasContinueReading && !recentBooks[0].coverBmpPath.empty()) {
     const std::string coverBmpPath = UITheme::getCoverThumbPath(recentBooks[0].coverBmpPath, coverHeight);
-    HalFile probeFile;
-    if (Storage.openFileForRead("HOME", coverBmpPath, probeFile)) {
-      Bitmap probeBitmap(probeFile);
-      if (probeBitmap.parseHeaders() == BmpReaderError::Ok) {
-        hasCoverImage = true;
-        const int imgWidth = probeBitmap.getWidth();
-        const int imgHeight = probeBitmap.getHeight();
-        if (imgWidth > 0 && imgHeight > 0) {
-          const float aspectRatio = static_cast<float>(imgWidth) / static_cast<float>(imgHeight);
-          const int maxCoverWidth = std::max(1, contentWidth * 3 / 4);
-          coverWidth = std::clamp(static_cast<int>(coverHeight * aspectRatio), 1, maxCoverWidth);
-        }
-      }
-      probeFile.close();
+    float heroAspect = 0.0f;
+    if (probeCoverAspect(coverBmpPath, heroAspect)) {
+      hasCoverImage = true;
+      const int maxCoverWidth = std::max(1, contentWidth * 3 / 4);
+      coverWidth = std::clamp(static_cast<int>(coverHeight * heroAspect), 1, maxCoverWidth);
     }
   }
   const int coverX = rect.x + (rect.width - coverWidth) / 2;
 
+  // Neighbour footprints. marginW is symmetric (coverX is always centred in rect), so one
+  // cap serves both sides: a neighbour's width is clamped so it never crosses into the
+  // hero's own rect, the same tradeoff the hero's own maxCoverWidth cap makes above for a
+  // very wide cover. A present-but-imageless neighbour still reserves maxNeighborWidth
+  // (its placeholder footprint) so its slot's geometry is well-defined either way; an
+  // absent neighbour reserves nothing, so there's no gap left for it.
+  const int marginW = coverX - contentX;
+  const int maxNeighborWidth = std::max(1, marginW - kHeroNeighborGap);
+  const bool hasLeftNeighbor = recentBooks.size() > 1;
+  const bool hasRightNeighbor = recentBooks.size() > 2;
+
+  int leftWidth = 0;
+  bool leftHasImage = false;
+  if (hasLeftNeighbor) {
+    if (!recentBooks[1].coverBmpPath.empty()) {
+      const std::string leftPath = UITheme::getCoverThumbPath(recentBooks[1].coverBmpPath, coverHeight);
+      float aspect = 0.0f;
+      if (probeCoverAspect(leftPath, aspect)) {
+        leftHasImage = true;
+        leftWidth = std::clamp(static_cast<int>(neighborHeight * aspect), 1, maxNeighborWidth);
+      }
+    }
+    if (!leftHasImage) leftWidth = maxNeighborWidth;
+  }
+  const int leftX = coverX - kHeroNeighborGap - leftWidth;
+
+  int rightWidth = 0;
+  bool rightHasImage = false;
+  if (hasRightNeighbor) {
+    if (!recentBooks[2].coverBmpPath.empty()) {
+      const std::string rightPath = UITheme::getCoverThumbPath(recentBooks[2].coverBmpPath, coverHeight);
+      float aspect = 0.0f;
+      if (probeCoverAspect(rightPath, aspect)) {
+        rightHasImage = true;
+        rightWidth = std::clamp(static_cast<int>(neighborHeight * aspect), 1, maxNeighborWidth);
+      }
+    }
+    if (!rightHasImage) rightWidth = maxNeighborWidth;
+  }
+  const int rightX = coverX + coverWidth + kHeroNeighborGap;
+
   // Selection wash -- LightGray rounded fill when selected, White otherwise -- never an
   // inverted block, and never a branch that paints one state and leaves the other alone
   // (see function comment above on why this must be unconditional). Confined to the
-  // margins beside the cover and the text band below it, so it never overlaps the cover
-  // art's own rect.
+  // margins beside the hero cover and the text band below it, so it never overlaps the
+  // hero's own rect. Neighbours are drawn on top of this margin fill below.
   const Color washColor = isSelected ? Color::LightGray : Color::White;
-  const int leftMarginW = coverX - contentX;
+  const int leftMarginW = marginW;
   if (leftMarginW > 0) {
     renderer.fillRoundedRect(contentX, coverY, leftMarginW, coverHeight, kRowRadius, true, false, true, false,
                              washColor);
@@ -581,39 +674,66 @@ void SlateTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
     renderer.fillRoundedRect(contentX, bandY, contentWidth, bandH, kRowRadius, false, false, true, true, washColor);
   }
 
-  // Cover art itself: the SD decode/draw is the only part of this function gated by the
-  // snapshot protocol, since it's the only part that costs an SD read.
-  if (hasCoverImage && !coverRendered) {
-    const std::string coverBmpPath = UITheme::getCoverThumbPath(recentBooks[0].coverBmpPath, coverHeight);
-    HalFile file;
-    if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
-      Bitmap bitmap(file);
-      if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-        renderer.drawBitmap(bitmap, coverX, coverY, coverWidth, coverHeight);
-        coverBufferStored = storeCoverBuffer();
-        coverRendered = coverBufferStored;  // Only consider it rendered if the snapshot actually landed.
-      }
-      file.close();
+  // Cover art: the SD decode/draw is the only part of this function gated by the
+  // snapshot protocol, since it's the only part that costs an SD read. All up-to-three
+  // covers are decoded/placeholder-filled together here, then storeCoverBuffer() snapshots
+  // the whole tile once -- mirroring Lyra3CoversTheme::drawRecentBookCover's "decode
+  // every cover, then snapshot once" shape for this same protocol. Only one Bitmap/HalFile
+  // is ever open at a time (sequential, not simultaneous), and decodeAndDrawCover streams
+  // rows rather than buffering a whole image, so this never holds three decoded covers in
+  // memory at once.
+  if (!coverRendered) {
+    bool decodedAny = false;
+    if (hasCoverImage) {
+      const std::string coverBmpPath = UITheme::getCoverThumbPath(recentBooks[0].coverBmpPath, coverHeight);
+      decodedAny |= decodeAndDrawCover(renderer, coverBmpPath, coverX, coverY, coverWidth, coverHeight);
+    } else if (!bufferRestored) {
+      // No cover: a filled LightGray rounded placeholder, never an outlined box. Cheap
+      // (no SD access), so -- matching BaseTheme's equivalent branch -- it's fine to
+      // gate it the same way rather than force it every frame, and it doesn't count
+      // toward decodedAny since no SD read happened.
+      renderer.fillRoundedRect(coverX, coverY, coverWidth, coverHeight, kRowRadius, Color::LightGray);
     }
-  } else if (!hasCoverImage && !bufferRestored && !coverRendered) {
-    // No cover: a filled LightGray rounded placeholder, never an outlined box. Cheap
-    // (no SD access), so -- matching BaseTheme's equivalent branch -- it's fine to
-    // gate it the same way rather than force it every frame.
-    renderer.fillRoundedRect(coverX, coverY, coverWidth, coverHeight, kRowRadius, Color::LightGray);
+    if (hasLeftNeighbor) {
+      if (leftHasImage) {
+        const std::string leftPath = UITheme::getCoverThumbPath(recentBooks[1].coverBmpPath, coverHeight);
+        decodedAny |= decodeAndDrawCover(renderer, leftPath, leftX, neighborY, leftWidth, neighborHeight);
+      } else if (!bufferRestored) {
+        renderer.fillRoundedRect(leftX, neighborY, leftWidth, neighborHeight, kRowRadius, Color::LightGray);
+      }
+    }
+    if (hasRightNeighbor) {
+      if (rightHasImage) {
+        const std::string rightPath = UITheme::getCoverThumbPath(recentBooks[2].coverBmpPath, coverHeight);
+        decodedAny |= decodeAndDrawCover(renderer, rightPath, rightX, neighborY, rightWidth, neighborHeight);
+      } else if (!bufferRestored) {
+        renderer.fillRoundedRect(rightX, neighborY, rightWidth, neighborHeight, kRowRadius, Color::LightGray);
+      }
+    }
+    if (decodedAny) {
+      coverBufferStored = storeCoverBuffer();
+      coverRendered = coverBufferStored;  // Only consider it rendered if the snapshot actually landed.
+    }
   }
 
-  // Rounded-corner mask on the cover art: reapplied every call (not just on a fresh SD
-  // decode), because its colour must track the *current* selection state. coverX/
-  // coverWidth are already known every call from the header probe above (no extra SD
-  // read), whether or not this frame decoded a fresh bitmap or is reusing a restored
-  // snapshot. Without this, a corner mask baked in at decode time (e.g. while
-  // unselected, so White) stays wrong forever once the tile becomes selected -- leaving
-  // white notches around a since-selected, gray-washed cover -- since the decode branch
-  // above only runs once per cover. Only the four corner triangles outside the rounded
-  // rect are touched, so this doesn't disturb the bitmap's own pixels even when
-  // bufferRestored is true.
+  // Rounded-corner masks on the cover art: reapplied every call (not just on a fresh SD
+  // decode), because their colour must track the *current* selection state. Footprints
+  // are already known every call from the header probes above (no extra SD read),
+  // whether or not this frame decoded fresh bitmaps or is reusing a restored snapshot.
+  // Without this, a corner mask baked in at decode time (e.g. while unselected, so White)
+  // stays wrong forever once the tile becomes selected -- leaving white notches around a
+  // since-selected, gray-washed cover -- since the decode branch above only runs once per
+  // cover. Only the four corner triangles outside each rounded rect are touched, so this
+  // doesn't disturb any bitmap's own pixels even when bufferRestored is true. Placeholders
+  // are skipped here: fillRoundedRect above already drew them rounded.
   if (hasCoverImage) {
     renderer.maskRoundedRectOutsideCorners(coverX, coverY, coverWidth, coverHeight, kRowRadius, washColor);
+  }
+  if (leftHasImage) {
+    renderer.maskRoundedRectOutsideCorners(leftX, neighborY, leftWidth, neighborHeight, kRowRadius, washColor);
+  }
+  if (rightHasImage) {
+    renderer.maskRoundedRectOutsideCorners(rightX, neighborY, rightWidth, neighborHeight, kRowRadius, washColor);
   }
 
   if (!hasContinueReading) {
