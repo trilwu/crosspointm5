@@ -497,6 +497,17 @@ void SlateTheme::drawTextField(const GfxRenderer& renderer, const Rect rect, con
 // confined to the margins around the cover art and the text band below it -- it never
 // overlaps the bitmap's own rect, so it (and the title/author/pill it sits behind) can
 // be safely repainted every call, whether or not this frame did a fresh SD decode.
+//
+// Critically, the wash fill (and the rounded-corner mask on the cover art itself) must
+// be painted UNCONDITIONALLY every call, in the current selection colour -- never gated
+// behind `isSelected` alone. storeCoverBuffer() snapshots whatever is on screen at decode
+// time, wash included; when HomeActivity later restores that snapshot on an unrelated
+// frame (selector moved elsewhere), the restored pixels carry whatever wash colour was
+// baked in, and this function has no other chance to correct it before the frame is
+// shown. An `if (isSelected) { paint gray }` with no unselected counterpart leaves a
+// stale gray wash on screen forever once selection moves off the tile; an unconditional
+// `isSelected ? LightGray : White` repaint corrects it every frame regardless of what a
+// stale restored snapshot contained.
 void SlateTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
                                      const std::vector<RecentBook>& recentBooks, const int selectorIndex,
                                      bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
@@ -537,30 +548,31 @@ void SlateTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
   }
   const int coverX = rect.x + (rect.width - coverWidth) / 2;
 
-  // Selection wash -- LightGray rounded fill, never an inverted block -- confined to
-  // the margins beside the cover and the text band below it (see function comment).
-  if (isSelected) {
-    const int leftMarginW = coverX - contentX;
-    if (leftMarginW > 0) {
-      renderer.fillRoundedRect(contentX, coverY, leftMarginW, coverHeight, kRowRadius, true, false, true, false,
-                               Color::LightGray);
-    }
-    const int rightMarginX = coverX + coverWidth;
-    const int rightMarginW = contentX + contentWidth - rightMarginX;
-    if (rightMarginW > 0) {
-      renderer.fillRoundedRect(rightMarginX, coverY, rightMarginW, coverHeight, kRowRadius, false, true, false, true,
-                               Color::LightGray);
-    }
-    const int bandY = coverY + coverHeight;
-    const int bandH = std::max(0, rect.y + rect.height - bandY);
-    if (bandH > 0) {
-      renderer.fillRoundedRect(contentX, bandY, contentWidth, bandH, kRowRadius, false, false, true, true,
-                               Color::LightGray);
-    }
+  // Selection wash -- LightGray rounded fill when selected, White otherwise -- never an
+  // inverted block, and never a branch that paints one state and leaves the other alone
+  // (see function comment above on why this must be unconditional). Confined to the
+  // margins beside the cover and the text band below it, so it never overlaps the cover
+  // art's own rect.
+  const Color washColor = isSelected ? Color::LightGray : Color::White;
+  const int leftMarginW = coverX - contentX;
+  if (leftMarginW > 0) {
+    renderer.fillRoundedRect(contentX, coverY, leftMarginW, coverHeight, kRowRadius, true, false, true, false,
+                             washColor);
+  }
+  const int rightMarginX = coverX + coverWidth;
+  const int rightMarginW = contentX + contentWidth - rightMarginX;
+  if (rightMarginW > 0) {
+    renderer.fillRoundedRect(rightMarginX, coverY, rightMarginW, coverHeight, kRowRadius, false, true, false, true,
+                             washColor);
+  }
+  const int bandY = coverY + coverHeight;
+  const int bandH = std::max(0, rect.y + rect.height - bandY);
+  if (bandH > 0) {
+    renderer.fillRoundedRect(contentX, bandY, contentWidth, bandH, kRowRadius, false, false, true, true, washColor);
   }
 
-  // Cover art itself: the only part of this function gated by the snapshot protocol,
-  // since it's the only part that costs an SD read.
+  // Cover art itself: the SD decode/draw is the only part of this function gated by the
+  // snapshot protocol, since it's the only part that costs an SD read.
   if (hasCoverImage && !coverRendered) {
     const std::string coverBmpPath = UITheme::getCoverThumbPath(recentBooks[0].coverBmpPath, coverHeight);
     HalFile file;
@@ -568,8 +580,6 @@ void SlateTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
       Bitmap bitmap(file);
       if (bitmap.parseHeaders() == BmpReaderError::Ok) {
         renderer.drawBitmap(bitmap, coverX, coverY, coverWidth, coverHeight);
-        renderer.maskRoundedRectOutsideCorners(coverX, coverY, coverWidth, coverHeight, kRowRadius,
-                                               isSelected ? Color::LightGray : Color::White);
         coverBufferStored = storeCoverBuffer();
         coverRendered = coverBufferStored;  // Only consider it rendered if the snapshot actually landed.
       }
@@ -580,6 +590,20 @@ void SlateTheme::drawRecentBookCover(GfxRenderer& renderer, const Rect rect,
     // (no SD access), so -- matching BaseTheme's equivalent branch -- it's fine to
     // gate it the same way rather than force it every frame.
     renderer.fillRoundedRect(coverX, coverY, coverWidth, coverHeight, kRowRadius, Color::LightGray);
+  }
+
+  // Rounded-corner mask on the cover art: reapplied every call (not just on a fresh SD
+  // decode), because its colour must track the *current* selection state. coverX/
+  // coverWidth are already known every call from the header probe above (no extra SD
+  // read), whether or not this frame decoded a fresh bitmap or is reusing a restored
+  // snapshot. Without this, a corner mask baked in at decode time (e.g. while
+  // unselected, so White) stays wrong forever once the tile becomes selected -- leaving
+  // white notches around a since-selected, gray-washed cover -- since the decode branch
+  // above only runs once per cover. Only the four corner triangles outside the rounded
+  // rect are touched, so this doesn't disturb the bitmap's own pixels even when
+  // bufferRestored is true.
+  if (hasCoverImage) {
+    renderer.maskRoundedRectOutsideCorners(coverX, coverY, coverWidth, coverHeight, kRowRadius, washColor);
   }
 
   if (!hasContinueReading) {
