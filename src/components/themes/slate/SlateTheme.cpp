@@ -14,12 +14,12 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int kRowRadius = 12;
+constexpr int kRowRadius = 16;
 constexpr int kRowInsetX = 20;
 constexpr int kRowGap = 6;
 constexpr int kTitleFontId = UI_12_FONT_ID;
 constexpr int kSubtitleFontId = SMALL_FONT_ID;
-constexpr int kSubtitleGap = 4;
+constexpr int kSubtitleGap = 8;
 // BaseTheme::drawBatteryRight shifts the battery icon down by this many pixels
 // from the y it's given (while drawing the percentage text at the unshifted
 // y). Subtract it here so the icon itself ends up centered in the header.
@@ -103,12 +103,11 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
     const bool isDimmed = rowDimmed && rowDimmed(i);
 
     if (isSelected) {
-      renderer.fillRoundedRect(rowX, rowY, rowWidth, rowHeight, kRowRadius, Color::Black);
+      renderer.fillRoundedRect(rowX, rowY, rowWidth, rowHeight, kRowRadius, Color::LightGray);
     }
     // Unselected rows are left unfilled. Whitespace separates them instead of
     // rules, which is what keeps the screen quiet on e-ink.
 
-    const bool inkOnLight = !isSelected;
     int textAreaWidth = rowWidth - kRowInsetX * 2;
     int textStartX = rowX + kRowInsetX;
 
@@ -134,7 +133,7 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
               renderer.truncatedText(kTitleFontId, valueText.c_str(), maxValueWidth, EpdFontFamily::REGULAR);
           const int valueW = renderer.getTextWidth(kTitleFontId, truncated.c_str(), EpdFontFamily::REGULAR);
           renderer.drawText(kTitleFontId, rowX + rowWidth - kRowInsetX - valueW,
-                            rowY + (rowHeight - titleLineHeight) / 2, truncated.c_str(), inkOnLight,
+                            rowY + (rowHeight - titleLineHeight) / 2, truncated.c_str(), true,
                             EpdFontFamily::REGULAR);
           textAreaWidth = std::max(0, textAreaWidth - valueW - kRowGap);
         }
@@ -146,14 +145,14 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
 
     if (!hasSubtitle) {
       renderer.drawText(kTitleFontId, textStartX, rowY + (rowHeight - titleLineHeight) / 2, title.c_str(),
-                        inkOnLight, titleStyle);
+                        true, titleStyle);
       continue;
     }
 
     const std::string subtitleRaw = rowSubtitle(i);
     if (subtitleRaw.empty()) {
       renderer.drawText(kTitleFontId, textStartX, rowY + (rowHeight - titleLineHeight) / 2, title.c_str(),
-                        inkOnLight, titleStyle);
+                        true, titleStyle);
       continue;
     }
 
@@ -161,9 +160,9 @@ void SlateTheme::drawList(const GfxRenderer& renderer, const Rect rect, const in
     const int titleY = rowY + (rowHeight - blockHeight) / 2;
     const std::string subtitle =
         renderer.truncatedText(kSubtitleFontId, subtitleRaw.c_str(), textAreaWidth, EpdFontFamily::REGULAR);
-    renderer.drawText(kTitleFontId, textStartX, titleY, title.c_str(), inkOnLight, titleStyle);
+    renderer.drawText(kTitleFontId, textStartX, titleY, title.c_str(), true, titleStyle);
     renderer.drawText(kSubtitleFontId, textStartX, titleY + titleLineHeight + kSubtitleGap, subtitle.c_str(),
-                      inkOnLight, EpdFontFamily::REGULAR);
+                      true, EpdFontFamily::REGULAR);
   }
 
   drawSlateScrollBar(renderer, rect, itemCount, pageStartIndex, pageItems);
@@ -255,7 +254,7 @@ void SlateTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const in
     const bool isSelected = selectedIndex == i;
 
     if (isSelected) {
-      renderer.fillRoundedRect(rowX, rowY, rowWidth, rowHeight, kRowRadius, Color::Black);
+      renderer.fillRoundedRect(rowX, rowY, rowWidth, rowHeight, kRowRadius, Color::LightGray);
     }
     // Unselected rows are left unfilled, matching drawList's visual language.
 
@@ -264,7 +263,7 @@ void SlateTheme::drawButtonMenu(GfxRenderer& renderer, const Rect rect, const in
     const std::string truncatedLabel =
         renderer.truncatedText(kTitleFontId, label.c_str(), maxLabelWidth, EpdFontFamily::BOLD);
     const int textY = rowY + (rowHeight - lineHeight) / 2;
-    renderer.drawText(kTitleFontId, rowX + kRowInsetX, textY, truncatedLabel.c_str(), !isSelected,
+    renderer.drawText(kTitleFontId, rowX + kRowInsetX, textY, truncatedLabel.c_str(), true,
                       EpdFontFamily::BOLD);
   }
 }

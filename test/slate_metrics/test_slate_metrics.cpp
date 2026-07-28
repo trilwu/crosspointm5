@@ -2,18 +2,17 @@
 
 #include "components/themes/slate/SlateTheme.h"
 
-// Design principle 1: nothing tappable is smaller than 44 px. These are
-// compile-time assertions so the floor cannot regress silently in a later edit.
-static_assert(SlateMetrics::values.listRowHeight >= 44, "list rows must meet the touch floor");
-static_assert(SlateMetrics::values.listWithSubtitleRowHeight >= 44, "subtitle rows must meet the touch floor");
-static_assert(SlateMetrics::values.menuRowHeight >= 44, "menu rows must meet the touch floor");
-static_assert(SlateMetrics::values.keyboardKeyHeight >= 44, "keyboard keys must meet the touch floor");
+// v2 targets comfortable phone-scale rows, not the 44px accessibility floor.
+static_assert(SlateMetrics::values.listRowHeight >= 60, "list rows must be comfortable, not minimal");
+static_assert(SlateMetrics::values.listWithSubtitleRowHeight >= 76, "subtitle rows must be comfortable");
+static_assert(SlateMetrics::values.menuRowHeight >= 64, "menu rows must be comfortable");
+static_assert(SlateMetrics::values.keyboardKeyHeight >= 52, "keyboard keys must meet the touch floor");
 
-TEST(SlateMetrics, TappableRowsMeetTouchFloor) {
-  EXPECT_GE(SlateMetrics::values.listRowHeight, 44);
-  EXPECT_GE(SlateMetrics::values.listWithSubtitleRowHeight, 44);
-  EXPECT_GE(SlateMetrics::values.menuRowHeight, 44);
-  EXPECT_GE(SlateMetrics::values.keyboardKeyHeight, 44);
+TEST(SlateMetrics, TappableRowsAreComfortable) {
+  EXPECT_GE(SlateMetrics::values.listRowHeight, 60);
+  EXPECT_GE(SlateMetrics::values.listWithSubtitleRowHeight, 76);
+  EXPECT_GE(SlateMetrics::values.menuRowHeight, 64);
+  EXPECT_GE(SlateMetrics::values.keyboardKeyHeight, 52);
 }
 
 TEST(SlateMetrics, SubtitleRowsAreTallerThanPlainRows) {
