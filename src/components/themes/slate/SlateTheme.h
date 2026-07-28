@@ -54,12 +54,12 @@ constexpr ThemeMetrics values = {.batteryWidth = 18,
                                  .popupProgressBarHeight = 6,
                                  .popupProgressDrawOutline = true,
                                  .popupProgressClampPercent = true,
-                                 .popupProgressFillInverted = false,
-                                 .popupProgressOutlineInverted = false,
+                                 .popupProgressFillInverted = true,
+                                 .popupProgressOutlineInverted = true,
                                  .optionPopupItemSpacing = 8,
                                  .optionPopupInnerPadding = 24,
                                  .optionPopupSelectionHPadding = 20,
-                                 .optionPopupSelectionVPadding = 14,
+                                 .optionPopupSelectionVPadding = 20,
                                  .optionPopupTitleGap = 16,
                                  .optionPopupUseSmallFont = false,
                                  .optionPopupOptionFontBold = false,
@@ -93,5 +93,10 @@ class SlateTheme : public BaseTheme {
                      const char* rightLabel = nullptr) const override;
   void drawTabBar(const GfxRenderer& renderer, Rect rect, const std::vector<TabInfo>& tabs,
                   bool selected) const override;
+  Rect drawPopup(const GfxRenderer& renderer, const char* message) const override;
+  void drawOptionPopup(const GfxRenderer& renderer, const char* title, const std::vector<std::string>& options,
+                       int selectedIndex) const override;
+  void drawTextField(const GfxRenderer& renderer, Rect rect, int textWidth, bool cursorMode = false,
+                     int contentStartX = 0, int contentWidth = 0) const override;
   bool showsFileIcons() const override { return true; }
 };

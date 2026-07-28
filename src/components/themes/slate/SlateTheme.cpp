@@ -328,3 +328,138 @@ void SlateTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const 
     currentX += textWidth + BaseMetrics::values.tabSpacing;
   }
 }
+
+Rect SlateTheme::drawPopup(const GfxRenderer& renderer, const char* message) const {
+  const auto& metrics = SlateMetrics::values;
+  const int marginX = metrics.popupMarginX;
+  const int marginY = metrics.popupMarginY;
+  const int frameThickness = metrics.popupFrameThickness;
+  const EpdFontFamily::Style popupFontFamily = metrics.popupTextBold ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
+  // Scale y position proportionally to screen height, matching BaseTheme::drawPopup.
+  const int y = static_cast<int>(renderer.getScreenHeight() * metrics.popupTopOffsetRatio);
+  const int textWidth = renderer.getTextWidth(kTitleFontId, message, popupFontFamily);
+  const int textHeight = renderer.getLineHeight(kTitleFontId);
+  const int w = textWidth + marginX * 2;
+  const int h = textHeight + marginY * 2;
+  const int x = (renderer.getScreenWidth() - w) / 2;
+
+  // Task 1's convention is that no Slate surface inverts to solid black. BaseTheme's
+  // rounded branch always fills the card black regardless of popupTextInverted, so it
+  // can't be reused here -- a white rounded card with a black outline stands in for it.
+  // popupTextInverted=false means "not inverted", i.e. normal black text on the light
+  // card, so the glyph-black flag is the negation of the metric.
+  renderer.fillRoundedRect(x, y, w, h, metrics.popupCornerRadius, Color::White);
+  renderer.drawRoundedRect(x, y, w, h, frameThickness, metrics.popupCornerRadius, true);
+
+  const int textX = x + (w - textWidth) / 2;
+  const int textY = y + marginY + metrics.popupTextBaselineOffsetY;
+  renderer.drawText(kTitleFontId, textX, textY, message, !metrics.popupTextInverted, popupFontFamily);
+  renderer.displayBuffer();
+  // The inner card rect (excludes the frame outline), matching BaseTheme::drawPopup's
+  // contract -- callers such as fillPopupProgress position a progress bar inside it.
+  return Rect{x, y, w, h};
+}
+
+void SlateTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title,
+                                 const std::vector<std::string>& options, const int selectedIndex) const {
+  const auto& metrics = SlateMetrics::values;
+  const int pageWidth = renderer.getScreenWidth();
+  const int pageHeight = renderer.getScreenHeight();
+
+  const int optionFontId = metrics.optionPopupUseSmallFont ? kSubtitleFontId : kTitleFontId;
+  const EpdFontFamily::Style optionStyle =
+      metrics.optionPopupOptionFontBold ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
+
+  const int itemSpacing = metrics.optionPopupItemSpacing;
+  const int innerPadding = metrics.optionPopupInnerPadding;
+  const int selectionHPadding = metrics.optionPopupSelectionHPadding;
+  const int selectionVPadding = metrics.optionPopupSelectionVPadding;
+
+  const int optionLineHeight = renderer.getLineHeight(optionFontId);
+  const int titleLineHeight = renderer.getLineHeight(kTitleFontId);
+  // Comfortable, not minimum: option rows must clear the 60px floor from the design
+  // language, which is why optionPopupSelectionVPadding was raised in Task 2 (see report).
+  const int rowHeight = optionLineHeight + selectionVPadding * 2;
+
+  int maxTextWidth = renderer.getTextWidth(kTitleFontId, title, EpdFontFamily::BOLD);
+  for (const auto& opt : options) {
+    const int w = renderer.getTextWidth(optionFontId, opt.c_str(), optionStyle);
+    if (w > maxTextWidth) maxTextWidth = w;
+  }
+
+  const int optionCount = static_cast<int>(options.size());
+  const int listHeight = rowHeight * optionCount + itemSpacing * std::max(0, optionCount - 1);
+  const int dialogW = std::min((maxTextWidth + innerPadding * 2 + selectionHPadding * 2) * 12 / 10,
+                               pageWidth - metrics.optionPopupDialogSideMargin * 2);
+  const int contentHeight = titleLineHeight + metrics.optionPopupTitleGap + listHeight;
+  const int dialogH = contentHeight + innerPadding * 2;
+  const int dialogX = (pageWidth - dialogW) / 2;
+  const int dialogY = (pageHeight - dialogH) / 2;
+
+  const int frameThickness = metrics.popupFrameThickness;
+  const int frameRadius = metrics.popupCornerRadius;
+
+  // Same white-card-with-outline convention as drawPopup -- never a solid black dialog.
+  renderer.fillRoundedRect(dialogX, dialogY, dialogW, dialogH, frameRadius, Color::White);
+  renderer.drawRoundedRect(dialogX, dialogY, dialogW, dialogH, frameThickness, frameRadius, true);
+
+  int y = dialogY + innerPadding;
+
+  renderer.drawCenteredText(kTitleFontId, y, title, true, EpdFontFamily::BOLD);
+  y += titleLineHeight;
+
+  // No title separator rule (optionPopupTitleSeparator is false) -- spacing alone
+  // separates the title from the option rows, per the design language's "whitespace,
+  // not rules" principle.
+  y += metrics.optionPopupTitleGap;
+
+  const int itemRectX = dialogX + innerPadding;
+  const int itemRectW = dialogW - innerPadding * 2;
+  const int selectionRadius = metrics.optionPopupSelectionRadius;
+
+  for (int i = 0; i < optionCount; i++) {
+    const int itemY = y + i * (rowHeight + itemSpacing);
+    const bool selected = (i == selectedIndex);
+    const char* labelText = options[i].c_str();
+
+    if (selected) {
+      // LightGray fill only -- Task 1's convention, never an inverted (black) row.
+      renderer.fillRoundedRect(itemRectX, itemY, itemRectW, rowHeight, selectionRadius, Color::LightGray);
+    }
+    // Unselected rows stay unfilled; whitespace separates them, matching drawList
+    // and drawButtonMenu elsewhere in this theme.
+
+    const int textW = renderer.getTextWidth(optionFontId, labelText, optionStyle);
+    const int textY = itemY + (rowHeight - optionLineHeight) / 2;
+    const int textX = itemRectX + (itemRectW - textW) / 2;
+    // Text is always black: the card is always white/light, so it never needs inverting.
+    renderer.drawText(optionFontId, textX, textY, labelText, true, optionStyle);
+  }
+}
+
+void SlateTheme::drawTextField(const GfxRenderer& renderer, const Rect rect, const int textWidth,
+                               const bool cursorMode, const int contentStartX, const int contentWidth) const {
+  const auto& metrics = SlateMetrics::values;
+  const int lineHeight = renderer.getLineHeight(kTitleFontId);
+  const int lineY = rect.y + rect.height + lineHeight + metrics.verticalSpacing;
+  const int thickness = cursorMode ? metrics.textFieldCursorThickness : metrics.textFieldNormalThickness;
+  const int radius = std::max(1, thickness / 2);
+
+  int lineStart;
+  int lineW;
+  if (contentWidth > 0) {
+    // KeyboardEntryActivity passes contentStartX/contentWidth for multi-line fields;
+    // both carry real position/size and must be honoured, as RoundedRaffTheme does.
+    lineStart = rect.x + contentStartX;
+    lineW = contentWidth + metrics.textFieldLineEndOffset;
+  } else {
+    lineW = textWidth + metrics.textFieldHorizontalPadding * 2;
+    lineStart = rect.x + (rect.width - lineW) / 2;
+    lineW += metrics.textFieldLineEndOffset;
+  }
+  if (lineW <= 0) return;
+
+  // A rounded bar replaces BaseTheme's hard-edged drawLine, so the underline follows
+  // the "generous corners" rule the rest of Slate uses instead of a sharp rule.
+  renderer.fillRoundedRect(lineStart, lineY, lineW, thickness, radius, Color::Black);
+}
