@@ -323,13 +323,23 @@ void SlateTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const 
 
     if (tab.selected) {
       if (selected) {
-        renderer.fillRect(currentX - 3, topY, textWidth + 6, lineHeight + underlineGap);
+        // Task 1's convention: a selected element is a LightGray rounded fill with
+        // black text, never an inverted solid-black chip. This only changes the fill
+        // colour/rounding and the text-state flag below -- currentX, the chip width
+        // (textWidth + 6), and the surrounding spacing are untouched, so
+        // tabIndexFromPoint's x arithmetic (which mirrors these same constants) still
+        // lines up with what's drawn.
+        renderer.fillRoundedRect(currentX - 3, topY, textWidth + 6, lineHeight + underlineGap, kRowRadius,
+                                 Color::LightGray);
       } else {
         renderer.fillRect(currentX, topY + lineHeight + underlineGap, textWidth, underlineHeight);
       }
     }
 
-    renderer.drawText(UI_12_FONT_ID, currentX, topY, tab.label, !(tab.selected && selected),
+    // Text is always black: the chip (when focused) is LightGray/light, and the
+    // underline-only state (unfocused) sits on the White page background, so
+    // neither case ever needs inverted (white) glyphs.
+    renderer.drawText(UI_12_FONT_ID, currentX, topY, tab.label, true,
                       tab.selected ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
 
     currentX += textWidth + BaseMetrics::values.tabSpacing;
