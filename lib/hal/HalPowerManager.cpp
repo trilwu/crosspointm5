@@ -93,6 +93,10 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
   // the whole board; a power-button press then powers it back on as a cold boot,
   // matching the stock/fork behavior. A short timer wake is armed as a fallback for
   // the USB-powered case, where the PMIC can't fully cut power.
+#if FREEINK_DEVICE_M5PAPERS3
+  // GPIO_NUM_44 only exists on the S3 GPIO map, so this block must also be gated at
+  // compile time -- BoardConfig::isM5PaperS3() alone would still fail to compile on
+  // targets (e.g. the C3) that don't have this pin.
   if (BoardConfig::isM5PaperS3()) {
     constexpr gpio_num_t PWROFF_PULSE_PIN = GPIO_NUM_44;
     pinMode(PWROFF_PULSE_PIN, OUTPUT);
@@ -103,6 +107,7 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
     freeink::PowerManager::deepSleep();                 // does not return
     return;
   }
+#endif
 
   // Waits for the power button to be physically released (so holding it doesn't
   // immediately wake the device again), then arms the wake source and sleeps.
@@ -142,7 +147,11 @@ HalPowerManager::WakeReason HalPowerManager::lightSleepUntilTouch(const uint32_t
   // rather than merely glitching. The whole point of light sleep here is that RAM
   // survives, so holding this domain is not an extra cost, it is the premise.
   esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_ON);
+#if SOC_PM_SUPPORT_RTC_PERIPH_PD
+  // Not every target has an RTC_PERIPH power domain to hold on (e.g. the C3); the
+  // enum value itself doesn't exist there, so this must be a compile-time guard.
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+#endif
 
   const esp_err_t err = esp_light_sleep_start();
   const esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
