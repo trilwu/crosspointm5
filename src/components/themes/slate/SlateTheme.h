@@ -29,7 +29,16 @@ constexpr ThemeMetrics values = {.batteryWidth = 18,
                                  .homeCoverHeight = 240,
                                  .homeCoverTileHeight = 400,
                                  .homeRecentBooksCount = 3,
-                                 .homeContinueReadingInMenu = true,
+                                 // Must stay false whenever homeRecentBooksCount > 1.
+                                 // HomeActivity::getMenuItemCount() adds recentBooks.size(),
+                                 // i.e. it assumes one menu row per recent book. With this
+                                 // true, onInput() hit-tests against the unreduced count
+                                 // (renderedMenuCount = menuCount), so the mapping runs
+                                 // recentBooks.size() - 1 rows ahead of what drawButtonMenu
+                                 // drew -- tapping Settings fired Recent Books. With it
+                                 // false the covers are their own selector entries and the
+                                 // count is reduced to match, as Lyra3CoversTheme does.
+                                 .homeContinueReadingInMenu = false,
                                  .homeMenuTopOffset = 12,
                                  .buttonHintsHeight = 40,
                                  .sideButtonHintsWidth = 30,
