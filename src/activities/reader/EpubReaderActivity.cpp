@@ -888,6 +888,21 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       addBookmark();
       break;
     }
+    case EpubReaderMenuActivity::MenuAction::FORCE_REFRESH: {
+      // Break the differential chain, then let the page repaint normally.
+      //
+      // pagesUntilFullRefresh = 1 makes displayWithRefreshCycle() pick
+      // HALF_REFRESH for the repaint that follows this menu returning, which is
+      // the same mode main.cpp's power-button FORCE_REFRESH uses. On this panel
+      // Half maps to epd_text, the only waveform that drives all 16 gray
+      // columns -- pixels stranded at an intermediate level by the fast
+      // waveform are held there until one of these runs.
+      //
+      // Deliberately not pushing a refresh here directly: the reader repaints
+      // on return from the menu regardless, so doing both would refresh twice.
+      pagesUntilFullRefresh = 1;
+      break;
+    }
   }
 }
 
